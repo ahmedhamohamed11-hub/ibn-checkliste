@@ -1,3 +1,4 @@
+// app/templates/page.tsx
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
@@ -25,6 +26,7 @@ export default function TemplatesPage() {
   const { userName } = useUser()
   const router = useRouter()
   const [templates, setTemplates] = useState<Template[]>([])
+  const [tasksByTemplate, setTasksByTemplate] = useState<Record<string, TemplateTask[]>>({})
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null)
@@ -33,7 +35,6 @@ export default function TemplatesPage() {
   const [templateTasks, setTemplateTasks] = useState<TemplateTask[]>([])
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
-  const [editingTaskTitle, setEditingTaskTitle] = useState('')
   const [saving, setSaving] = useState(false)
   const [creatingProject, setCreatingProject] = useState<string | null>(null)
 
@@ -53,7 +54,20 @@ export default function TemplatesPage() {
       .select('*')
       .eq('created_by', userName)
       .order('created_at', { ascending: false })
-    if (!error && data) setTemplates(data)
+    if (!error && data) {
+      setTemplates(data)
+      // Lade Aufgaben für jede Vorlage
+      const tasksMap: Record<string, TemplateTask[]> = {}
+      for (const t of data) {
+        const { data: tasks } = await supabase
+          .from('template_tasks')
+          .select('*')
+          .eq('template_id', t.id)
+          .order('position', { ascending: true })
+        tasksMap[t.id] = tasks || []
+      }
+      setTasksByTemplate(tasksMap)
+    }
     setLoading(false)
   }
 
@@ -81,6 +95,7 @@ export default function TemplatesPage() {
     setTemplateTasks([])
     setNewTaskTitle('')
     setEditingTaskId(null)
+    setShowCreateModal(false)
   }
 
   const saveTemplate = async () => {
@@ -107,9 +122,8 @@ export default function TemplatesPage() {
     await loadTemplates()
     setSaving(false)
     if (!editingTemplate) {
-      // Nach dem Erstellen einer neuen Vorlage bleibt das Modal offen? Besser schließen oder im Edit-Modus bleiben.
-      // Hier schließen wir es.
       setShowCreateModal(false)
+      closeEdit()
     }
   }
 
@@ -153,7 +167,6 @@ export default function TemplatesPage() {
     if (direction === 'down' && index === templateTasks.length - 1) return
     const newTasks = [...templateTasks]
     const swapIndex = direction === 'up' ? index - 1 : index + 1
-    // swap positions
     const tempPos = newTasks[index].position
     newTasks[index].position = newTasks[swapIndex].position
     newTasks[swapIndex].position = tempPos
@@ -166,7 +179,6 @@ export default function TemplatesPage() {
     if (!userName) return
     setCreatingProject(template.id)
     try {
-      // 1. Projekt erstellen
       const { data: newProject, error: projectError } = await supabase
         .from('projects')
         .insert({
@@ -177,22 +189,16 @@ export default function TemplatesPage() {
         })
         .select()
         .single()
-
       if (projectError || !newProject) throw new Error('Projekt konnte nicht erstellt werden')
-
-      // 2. Teilnehmer hinzufügen
       await supabase.from('project_participants').insert({
         project_id: newProject.id,
         user_name: userName,
       })
-
-      // 3. Aufgaben der Vorlage laden
       const { data: tasks } = await supabase
         .from('template_tasks')
         .select('title, description, position')
         .eq('template_id', template.id)
         .order('position')
-
       if (tasks && tasks.length > 0) {
         await supabase.from('tasks').insert(
           tasks.map(t => ({
@@ -205,7 +211,6 @@ export default function TemplatesPage() {
           }))
         )
       }
-
       router.push(`/project/${newProject.id}`)
     } catch (err) {
       console.error(err)
@@ -225,11 +230,11 @@ export default function TemplatesPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '800px', margin: '0 auto', padding: '20px 16px 80px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' }}>
+      <main style={{ maxWidth: '800px', margin: '0 auto', padding: '24px 16px 80px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap' }}>
           <div>
             <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Projektvorlagen</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Verwalte Vorlagen mit Aufgaben – beim Erstellen eines Projekts übernehmen</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Verwalte Vorlagen – beim Erstellen eines Projekts werden alle Aufgaben übernommen.</p>
           </div>
           <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ padding: '8px 16px' }}>
             <Plus size={16} /> Neue Vorlage
@@ -239,34 +244,56 @@ export default function TemplatesPage() {
         {templates.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
             <BookTemplate size={48} style={{ color: 'var(--text-muted)', marginBottom: '12px' }} />
-            <p style={{ color: 'var(--text-secondary)' }}>Noch keine Vorlagen vorhanden</p>
+            <p>Noch keine Vorlagen vorhanden</p>
             <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ marginTop: '12px' }}>Erste Vorlage erstellen</button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {templates.map(template => (
-              <div key={template.id} className="card" style={{ padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                  <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 700 }}>{template.name}</h3>
-                    {template.description && <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{template.description}</p>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {templates.map(template => {
+              const tasks = tasksByTemplate[template.id] || []
+              return (
+                <div key={template.id} className="card" style={{ padding: '18px 20px' }}>
+                  {/* Kopf mit Titel, Beschreibung, Aktionen */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                    <div>
+                      <h2 style={{ fontSize: '18px', fontWeight: 700 }}>{template.name}</h2>
+                      {template.description && <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>{template.description}</p>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="btn btn-ghost" onClick={() => openEdit(template)} style={{ padding: '4px 8px' }}><Edit size={16} /></button>
+                      <button className="btn btn-ghost" onClick={() => deleteTemplate(template.id)} style={{ padding: '4px 8px', color: 'var(--danger)' }}><Trash2 size={16} /></button>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <button className="btn btn-ghost" onClick={() => openEdit(template)} style={{ padding: '4px 8px' }}><Edit size={14} /></button>
-                    <button className="btn btn-ghost" onClick={() => deleteTemplate(template.id)} style={{ padding: '4px 8px', color: 'var(--danger)' }}><Trash2 size={14} /></button>
+
+                  {/* Aufgabenliste (erste 5) wie in der alten Version */}
+                  <div style={{ marginBottom: '16px' }}>
+                    {tasks.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Keine Aufgaben</p>}
+                    {tasks.slice(0, 5).map(task => (
+                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent)' }} />
+                        <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{task.title}</span>
+                      </div>
+                    ))}
+                    {tasks.length > 5 && (
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', marginLeft: '13px' }}>
+                        + {tasks.length - 5} weitere ...
+                      </p>
+                    )}
                   </div>
+
+                  {/* Button zum Erstellen eines Projekts */}
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => createProjectFromTemplate(template)}
+                    disabled={creatingProject === template.id}
+                    style={{ width: '100%', padding: '10px' }}
+                  >
+                    {creatingProject === template.id ? 'Wird erstellt...' : 'Neues Projekt mit dieser Vorlage'}
+                    <ChevronRight size={16} style={{ marginLeft: '6px' }} />
+                  </button>
                 </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => createProjectFromTemplate(template)}
-                  disabled={creatingProject === template.id}
-                  style={{ marginTop: '12px', width: '100%' }}
-                >
-                  {creatingProject === template.id ? 'Wird erstellt...' : 'Neues Projekt mit dieser Vorlage'}
-                  <ChevronRight size={16} style={{ marginLeft: '6px' }} />
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </main>
@@ -274,7 +301,7 @@ export default function TemplatesPage() {
       {/* Modal zum Erstellen/Bearbeiten einer Vorlage */}
       {(showCreateModal || editingTemplate) && (
         <div className="modal-overlay" onClick={closeEdit}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: 700 }}>{editingTemplate ? 'Vorlage bearbeiten' : 'Neue Vorlage'}</h3>
               <button onClick={closeEdit} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
@@ -298,8 +325,8 @@ export default function TemplatesPage() {
             {editingTemplate && (
               <div style={{ marginBottom: '16px' }}>
                 <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>Aufgaben</h4>
-                <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px', marginBottom: '8px' }}>
-                  {templateTasks.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center' }}>Keine Aufgaben</p>}
+                <div style={{ maxHeight: '280px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px', marginBottom: '8px' }}>
+                  {templateTasks.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', padding: '12px' }}>Keine Aufgaben</p>}
                   {templateTasks.map((task, idx) => (
                     <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
                       {editingTaskId === task.id ? (
@@ -344,7 +371,7 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .modal-overlay {
           position: fixed;
           top: 0;
