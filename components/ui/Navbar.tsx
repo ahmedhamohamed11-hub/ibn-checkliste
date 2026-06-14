@@ -193,45 +193,13 @@ export default function Navbar() {
       </nav>
 
       {/* Spacer so content isn't hidden behind bottom nav on mobile */}
-      <div
-  className="bottom-nav-spacer"
-  style={{
-    height: '140px',
-  }}
-/>
+      <div className="bottom-nav-spacer" />
 
       {/* Click-outside to close user menu */}
       {showUserMenu && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onClick={() => setShowUserMenu(false)} />
       )}
 
-      <style>{`
-        /* Bottom nav: nur auf Mobile sichtbar */
-        .bottom-nav {
-          display: flex;
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          background: var(--bg-secondary);
-          border-top: 1px solid var(--border);
-          z-index: 40;
-          padding-bottom: env(safe-area-inset-bottom);
-        }
-        .bottom-nav-spacer {
-          height: calc(70px + env(safe-area-inset-bottom));
-        }
-        .hide-mobile {
-          display: none;
-        }
-
-        /* Auf Desktop: Bottom nav verstecken, Name zeigen */
-        @media (min-width: 768px) {
-          .bottom-nav { display: none; }
-          .bottom-nav-spacer { display: none; }
-          .hide-mobile { display: inline; }
-        }
-      `}</style>
     </>
   )
 }
