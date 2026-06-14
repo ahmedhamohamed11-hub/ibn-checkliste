@@ -12,12 +12,12 @@ import ActivityModal from '@/components/ActivityModal'
 import EditProjectModal from '@/components/EditProjectModal'
 import ManageParticipantsModal from '@/components/ManageParticipantsModal'
 import {
-  ArrowLeft, Plus, History, Settings, Users, ListPlus, Star
+  ArrowLeft, Plus, History, Settings, Users, ListPlus
 } from 'lucide-react'
 
 type FilterStatus = 'alle' | TaskStatus
 
-// ==================== ERWEITERTES ADD TASK MODAL ====================
+// ==================== ADD TASK MODAL MIT FAVORITEN ====================
 interface AddTaskModalProps {
   projectId: string
   userName: string
@@ -36,7 +36,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
   const [loading, setLoading] = useState(false)
   const [loadingFavorites, setLoadingFavorites] = useState(true)
 
-  // Favoriten aus Supabase laden (global, projektunabhängig)
+  // Favoriten aus Supabase laden
   const loadFavorites = useCallback(async () => {
     if (!userName) return
     setLoadingFavorites(true)
@@ -58,7 +58,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
     loadFavorites()
   }, [loadFavorites])
 
-  // Manuelle Aufgabe erstellen (inkl. optionalem Favoriten)
+  // Manuelle Aufgabe erstellen
   const handleCreateManual = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
@@ -75,6 +75,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
     })
 
     if (taskError) {
+      console.error('Fehler beim Erstellen der Aufgabe:', taskError)
       setLoading(false)
       return
     }
@@ -87,9 +88,8 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
       detail: title.trim(),
     })
 
-    // Favorit speichern, falls gewünscht
+    // Optional: Favorit speichern
     if (saveAsFavorite) {
-      // Prüfen, ob bereits ein Favorit mit gleichem Titel existiert (case‑insensitive)
       const { data: existing } = await supabase
         .from('favorites')
         .select('id')
@@ -98,7 +98,6 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
         .maybeSingle()
 
       if (!existing) {
-        // Höchste Position ermitteln
         const { data: maxPosData } = await supabase
           .from('favorites')
           .select('position')
@@ -120,7 +119,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
     setLoading(false)
   }
 
-  // Aufgabe aus ausgewähltem Favoriten erstellen
+  // Aufgabe aus Favorit erstellen
   const handleCreateFromFavorite = async () => {
     if (!selectedFavoriteId) return
     const selected = favorites.find(f => f.id === selectedFavoriteId)
@@ -136,16 +135,21 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
       position: nextPosition,
     })
 
-    if (!error) {
-      await supabase.from('activity_log').insert({
-        project_id: projectId,
-        actor: userName,
-        action: 'Aufgabe aus Favorit hinzugefügt',
-        detail: selected.title,
-      })
-      onCreated()
-      onClose()
+    if (error) {
+      console.error('Fehler beim Erstellen aus Favorit:', error)
+      setLoading(false)
+      return
     }
+
+    await supabase.from('activity_log').insert({
+      project_id: projectId,
+      actor: userName,
+      action: 'Aufgabe aus Favorit hinzugefügt',
+      detail: selected.title,
+    })
+
+    onCreated()
+    onClose()
     setLoading(false)
   }
 
@@ -199,32 +203,28 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
               style={{ marginBottom: '16px', resize: 'vertical' }}
             />
 
-            {/* Checkbox "Als Favorit speichern" */}
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 checked={saveAsFavorite}
                 onChange={(e) => setSaveAsFavorite(e.target.checked)}
               />
-              <span style={{ fontSize: '14px' }}>☐ Als Favorit speichern</span>
+              <span style={{ fontSize: '14px' }}>Als Favorit speichern</span>
             </label>
 
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
-              <button type="button" className="btn btn-ghost" onClick={onClose}
-                style={{ padding: '7px 14px', fontSize: '13px', minHeight: 'auto' }}>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: '8px 16px' }}>
                 Abbrechen
               </button>
-              <button
-                className="btn btn-primary"
-                onClick={handleCreateFromFavorite}
-                disabled={loading || favorites.length === 0 || !selectedFavoriteId}
-                style={{ padding: '7px 16px', fontSize: '13px', minHeight: 'auto' }}
-              >
-                {loading ? '…' : 'Übernehmen'}
+              <button type="submit" className="btn btn-primary" disabled={loading || !title.trim()} style={{ padding: '8px 16px' }}>
+                {loading ? 'Wird erstellt…' : 'Aufgabe erstellen'}
               </button>
             </div>
+          </form>
+        ) : (
+          <div>
             {loadingFavorites ? (
-              <p style={{ color: 'var(--text-muted)' }}>Favoriten werden geladen…</p>
+              <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Favoriten werden geladen…</p>
             ) : favorites.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>
                 Keine Favoriten vorhanden. Erstelle zuerst eine Aufgabe und speichere sie als Favorit.
@@ -245,12 +245,15 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-ghost" onClick={onClose}>Abbrechen</button>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: '8px 16px' }}>
+                Abbrechen
+              </button>
               <button
                 className="btn btn-primary"
                 onClick={handleCreateFromFavorite}
                 disabled={loading || favorites.length === 0 || !selectedFavoriteId}
+                style={{ padding: '8px 16px' }}
               >
                 {loading ? 'Wird erstellt…' : 'Aufgabe aus Favorit erstellen'}
               </button>
@@ -281,8 +284,6 @@ export default function ProjectPage() {
   const [showParticipants, setShowParticipants] = useState(false)
   const [listInput, setListInput] = useState('')
   const [showListImport, setShowListImport] = useState(false)
-
-  // Keine localStorage-Favoriten mehr – das Modal lädt selbst aus Supabase
 
   useEffect(() => {
     if (!userName) { router.push('/'); return }
