@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
+  const [importingFavorites, setImportingFavorites] = useState(false)
 
   useEffect(() => {
     if (!userName) {
@@ -191,7 +192,6 @@ export default function DashboardPage() {
     if (!project || deleteConfirmName !== project.name) return
 
     try {
-      // Löschen in der richtigen Reihenfolge (abhängige Tabellen zuerst)
       await supabase.from('activity_log').delete().eq('project_id', deleteTarget)
       await supabase.from('comments').delete().eq('project_id', deleteTarget)
       await supabase.from('tasks').delete().eq('project_id', deleteTarget)
@@ -206,6 +206,58 @@ export default function DashboardPage() {
       setDeleteConfirmName('')
       loadProjects()
     }
+  }
+
+  // ⭐ Neue Funktion: Alle Favoriten des Benutzers in ein neues Projekt importieren
+  const importFavoritesToProject = async (projectId: string) => {
+    if (!userName) return
+    setImportingFavorites(true)
+    try {
+      const { data: favorites, error } = await supabase
+        .from('favorites')
+        .select('title')
+        .eq('user_name', userName)
+        .order('position', { ascending: true })
+
+      if (error) throw error
+      if (!favorites || favorites.length === 0) {
+        console.log('Keine Favoriten zum Importieren')
+        return
+      }
+
+      const newTasks = favorites.map((fav, idx) => ({
+        project_id: projectId,
+        title: fav.title,
+        status: 'offen',
+        created_by: userName,
+        position: idx,
+      }))
+
+      const { error: insertError } = await supabase.from('tasks').insert(newTasks)
+      if (insertError) throw insertError
+
+      await supabase.from('activity_log').insert({
+        project_id: projectId,
+        actor: userName,
+        action: `${favorites.length} Favoriten als Aufgaben importiert`,
+        detail: favorites.map(f => f.title).join(', '),
+      })
+
+      console.log(`${favorites.length} Favoriten wurden als Aufgaben importiert.`)
+    } catch (err) {
+      console.error('Fehler beim Importieren der Favoriten:', err)
+    } finally {
+      setImportingFavorites(false)
+    }
+  }
+
+  // ⭐ Neuer Callback, der nach der Projekterstellung aufgerufen wird
+  const handleProjectCreated = async (newProjectId: string) => {
+    // Zuerst alle Favoriten importieren
+    await importFavoritesToProject(newProjectId)
+    // Dann zum Projekt navigieren
+    router.push(`/project/${newProjectId}`)
+    setShowCreateModal(false)
   }
 
   const filtered = projects.filter(p => {
@@ -543,14 +595,14 @@ export default function DashboardPage() {
       {showCreateModal && (
         <CreateProjectModal
           onClose={() => setShowCreateModal(false)}
-          onCreated={(id) => {
-            setShowCreateModal(false)
-            router.push(`/project/${id}`)
-          }}
+          onCreated={handleProjectCreated}
           userName={userName!}
         />
       )}
 
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   )
 }
