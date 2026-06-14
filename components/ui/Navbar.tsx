@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { useTheme } from '@/hooks/useTheme'
 import { supabase } from '@/lib/supabase'
-import { Thermometer, LayoutDashboard, Star, BookTemplate, Moon, Sun, LogOut, ChevronDown, X } from 'lucide-react'
+import { Thermometer, LayoutDashboard, Star, BookTemplate, Moon, Sun, LogOut, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 
 export default function Navbar() {
@@ -30,11 +30,10 @@ export default function Navbar() {
     }
   }
 
-  // NEU: Logout-Funktion
+  // Korrigierte Logout-Funktion: setUserName('') statt null
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    // Setze den Benutzernamen zurück (falls dein useUser das nicht automatisch tut)
-    setUserName(null)
+    setUserName('')   // <-- hier wurde null durch '' ersetzt
     router.push('/')
     setShowUserMenu(false)
   }
@@ -108,7 +107,6 @@ export default function Navbar() {
               }}>
                 {userName?.charAt(0).toUpperCase()}
               </div>
-              {/* Name nur auf größeren Screens */}
               <span className="hide-mobile">{userName}</span>
               <ChevronDown size={14} />
             </button>
@@ -156,7 +154,7 @@ export default function Navbar() {
                       ✏️ Name ändern
                     </button>
                     <button
-                      onClick={handleLogout} // ✅ korrigierter Logout
+                      onClick={handleLogout}
                       style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '10px 12px', borderRadius: '8px', color: 'var(--danger)', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', minHeight: 'auto' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'none')}
@@ -171,7 +169,7 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* ── BOTTOM NAV (nur Mobile) ── */}
+      {/* Bottom Navigation (nur Mobile) */}
       <nav className="bottom-nav">
         {nav.map(item => {
           const active = pathname.startsWith(item.href)
@@ -202,7 +200,7 @@ export default function Navbar() {
         })}
       </nav>
 
-      {/* Click-outside to close user menu */}
+      {/* Click-outside zum Schließen des Benutzermenüs */}
       {showUserMenu && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onClick={() => setShowUserMenu(false)} />
       )}
