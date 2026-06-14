@@ -236,7 +236,13 @@ export default function ProjectPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
 
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '20px 16px' }}>
+     <main
+  style={{
+    maxWidth: '900px',
+    margin: '0 auto',
+    padding: '20px 16px 140px 16px'
+  }}
+>
         {/* Back + title */}
         <div style={{ marginBottom: '20px' }}>
           <button
