@@ -19,6 +19,7 @@ interface ProjectWithStats extends Project {
 export default function DashboardPage() {
   const { userName } = useUser()
   const router = useRouter()
+
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -29,13 +30,18 @@ export default function DashboardPage() {
 
   const loadProjects = useCallback(async () => {
     if (!userName) return
-    setLoading(true)
 
+    setLoading(true)
     try {
-      const { data: participantData } = await supabase
+      const { data: participantData, error: participantError } = await supabase
         .from('project_participants')
         .select('project_id')
         .eq('user_name', userName)
+
+      if (participantError) {
+        setProjects([])
+        return
+      }
 
       const projectIds = participantData?.map(p => p.project_id) || []
 
@@ -44,13 +50,13 @@ export default function DashboardPage() {
         return
       }
 
-      const { data: projectsData } = await supabase
+      const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select('*')
         .in('id', projectIds)
         .order('created_at', { ascending: false })
 
-      if (!projectsData) {
+      if (projectsError || !projectsData) {
         setProjects([])
         return
       }
@@ -102,7 +108,7 @@ export default function DashboardPage() {
   }
 
   const handleDuplicate = async (project: ProjectWithStats) => {
-    const { data: newProject } = await supabase
+    const { data: newProject, error: newProjectError } = await supabase
       .from('projects')
       .insert({
         name: `${project.name} (Kopie)`,
@@ -113,7 +119,7 @@ export default function DashboardPage() {
       .select()
       .single()
 
-    if (!newProject) return
+    if (newProjectError || !newProject) return
 
     const { data: origParticipants } = await supabase
       .from('project_participants')
@@ -189,7 +195,6 @@ export default function DashboardPage() {
           paddingBottom: '140px',
         }}
       >
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px' }}>
           <div>
             <h1 style={{ color: 'var(--text-primary)', fontSize: 'clamp(18px, 5vw, 24px)', fontWeight: 800 }}>
@@ -209,7 +214,6 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Search */}
         <div style={{ position: 'relative', marginBottom: '12px' }}>
           <Search
             size={15}
@@ -231,7 +235,6 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Tabs */}
         <div
           style={{
             display: 'flex',
@@ -282,7 +285,6 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Projects list */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
             <div
@@ -327,7 +329,6 @@ export default function DashboardPage() {
                 style={{ padding: '16px', cursor: 'pointer', width: '100%' }}
                 onClick={() => router.push(`/project/${project.id}`)}
               >
-                {/* Top row */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', gap: '10px' }}>
                   <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '15px', flex: 1, paddingRight: '8px', lineHeight: 1.3 }}>
                     {project.name}
@@ -351,7 +352,6 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Meta */}
                 <div style={{ display: 'flex', gap: '12px', marginBottom: '10px', flexWrap: 'wrap' }}>
                   {project.commissioning_date && (
                     <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
@@ -363,14 +363,12 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                {/* Progress */}
                 {project.task_count > 0 && (
                   <div style={{ marginBottom: '10px' }}>
                     <ProgressBar done={project.done_count} total={project.task_count} />
                   </div>
                 )}
 
-                {/* Bottom row */}
                 <div
                   style={{
                     display: 'flex',
@@ -471,7 +469,6 @@ export default function DashboardPage() {
         )}
       </main>
 
-      {/* Delete modal */}
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ margin: '0 12px' }}>
