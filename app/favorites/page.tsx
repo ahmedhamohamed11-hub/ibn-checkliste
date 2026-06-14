@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { supabase } from '@/lib/supabase'
 import Navbar from '@/components/ui/Navbar'
-import { Star, Trash2, GripVertical } from 'lucide-react'
+import { Star, Trash2, GripVertical, Edit, Check, X } from 'lucide-react'
 
 interface Favorite {
   id: string
@@ -21,6 +21,8 @@ export default function FavoritesPage() {
   const [loading, setLoading] = useState(true)
   const [newTitle, setNewTitle] = useState('')
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
 
   useEffect(() => {
     if (!userName) {
@@ -73,6 +75,30 @@ export default function FavoritesPage() {
     }
   }
 
+  const startEdit = (fav: Favorite) => {
+    setEditingId(fav.id)
+    setEditTitle(fav.title)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditTitle('')
+  }
+
+  const saveEdit = async (id: string) => {
+    if (!editTitle.trim()) return
+    const { error } = await supabase
+      .from('favorites')
+      .update({ title: editTitle.trim() })
+      .eq('id', id)
+    if (error) {
+      console.error('Fehler beim Aktualisieren:', error)
+    } else {
+      loadFavorites()
+    }
+    cancelEdit()
+  }
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
@@ -105,15 +131,40 @@ export default function FavoritesPage() {
               <div key={fav.id} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
                   <GripVertical size={16} style={{ color: 'var(--text-muted)' }} />
-                  <span style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 500 }}>{fav.title}</span>
+                  {editingId === fav.id ? (
+                    <input
+                      autoFocus
+                      className="input"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && saveEdit(fav.id)}
+                      style={{ flex: 1, fontSize: '14px', padding: '6px 10px' }}
+                    />
+                  ) : (
+                    <span style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 500 }}>{fav.title}</span>
+                  )}
                 </div>
-                <button
-                  onClick={() => deleteFavorite(fav.id)}
-                  className="btn btn-ghost"
-                  style={{ padding: '6px', minHeight: 'auto', color: 'var(--danger)' }}
-                >
-                  <Trash2 size={16} />
-                </button>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {editingId === fav.id ? (
+                    <>
+                      <button onClick={() => saveEdit(fav.id)} className="btn btn-ghost" style={{ padding: '6px', color: 'var(--accent)' }}>
+                        <Check size={16} />
+                      </button>
+                      <button onClick={cancelEdit} className="btn btn-ghost" style={{ padding: '6px', color: 'var(--text-muted)' }}>
+                        <X size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEdit(fav)} className="btn btn-ghost" style={{ padding: '6px' }}>
+                        <Edit size={16} />
+                      </button>
+                      <button onClick={() => deleteFavorite(fav.id)} className="btn btn-ghost" style={{ padding: '6px', color: 'var(--danger)' }}>
+                        <Trash2 size={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
