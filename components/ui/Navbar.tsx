@@ -193,7 +193,12 @@ export default function Navbar() {
       </nav>
 
       {/* Spacer so content isn't hidden behind bottom nav on mobile */}
-      <div className="bottom-nav-spacer" />
+      <div
+  className="bottom-nav-spacer"
+  style={{
+    height: '140px',
+  }}
+/>
 
       {/* Click-outside to close user menu */}
       {showUserMenu && (
