@@ -18,7 +18,7 @@ export default function TemplatesPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px' }}>
+      <main className="main-content" style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
           <BookTemplate size={22} style={{ color: 'var(--accent-light)' }} />
           <h1 style={{ color: 'var(--text-primary)', fontSize: '22px', fontWeight: 800 }}>Projektvorlagen</h1>
