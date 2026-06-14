@@ -12,9 +12,7 @@ import ActivityModal from '@/components/ActivityModal'
 import EditProjectModal from '@/components/EditProjectModal'
 import AddTaskModal from '@/components/AddTaskModal'
 import ManageParticipantsModal from '@/components/ManageParticipantsModal'
-import {
-  ArrowLeft, Plus, History, Settings, Users, ListPlus, Filter
-} from 'lucide-react'
+import { ArrowLeft, Plus, History, Settings, Users, ListPlus, Filter } from 'lucide-react'
 
 type FilterStatus = 'alle' | TaskStatus
 
@@ -75,92 +73,78 @@ export default function ProjectPage() {
     if (data) setParticipants(data)
   }
 
-const handleStatusChange = async (task: Task, newStatus: TaskStatus) => {
-  const updates: Partial<Task> = {
-    status: newStatus,
-    modified_by: userName,
-  }
+  const handleStatusChange = async (task: Task, newStatus: TaskStatus) => {
+    const updates: Partial<Task> = {
+      status: newStatus,
+      modified_by: userName,
+    }
 
-  if (newStatus === 'erledigt') {
-    updates.completed_by = userName!
-  } else if (task.status === 'erledigt') {
-    updates.completed_by = null
-  }
+    if (newStatus === 'erledigt') {
+      updates.completed_by = userName!
+    } else if (task.status === 'erledigt') {
+      updates.completed_by = null
+    }
 
-  await supabase
-    .from('tasks')
-    .update(updates)
-    .eq('id', task.id)
+    await supabase.from('tasks').update(updates).eq('id', task.id)
 
-  const actionMap = {
-    offen: 'auf Offen gesetzt',
-    in_arbeit: 'in Bearbeitung',
-    erledigt: 'erledigt',
-  }
+    const actionMap = {
+      offen: 'auf Offen gesetzt',
+      in_arbeit: 'in Bearbeitung',
+      erledigt: 'erledigt',
+    }
 
-  await supabase.from('activity_log').insert({
-    project_id: id,
-    task_id: task.id,
-    actor: userName,
-    action: `Aufgabe ${actionMap[newStatus]}`,
-    detail: task.title,
-  })
-
-  loadTasks()
-}
-
-const addFavoritesToProject = async () => {
-  const { data } = await supabase
-    .from('favorites')
-    .select('*')
-
-  if (!data?.length) return
-
-  const maxPos =
-    tasks.length > 0
-      ? Math.max(...tasks.map(t => t.position)) + 1
-      : 0
-
-  await supabase.from('tasks').insert(
-    data.map((fav, index) => ({
+    await supabase.from('activity_log').insert({
       project_id: id,
-      title: fav.title,
-      status: 'offen',
-      created_by: userName,
-      position: maxPos + index,
-    }))
-  )
+      task_id: task.id,
+      actor: userName,
+      action: `Aufgabe ${actionMap[newStatus]}`,
+      detail: task.title,
+    })
 
-  loadTasks()
-}
+    loadTasks()
+  }
 
-const handleListImport = async () => {
-  const lines = listInput
-    .split('\n')
-    .map(l => l.trim())
-    .filter(Boolean)
+  const addFavoritesToProject = async () => {
+    const { data } = await supabase.from('favorites').select('*')
+    if (!data?.length) return
 
-  if (!lines.length) return
+    const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position)) + 1 : 0
 
-  const maxPos =
-    tasks.length > 0
-      ? Math.max(...tasks.map(t => t.position)) + 1
-      : 0
+    await supabase.from('tasks').insert(
+      data.map((fav, index) => ({
+        project_id: id,
+        title: fav.title,
+        status: 'offen',
+        created_by: userName,
+        position: maxPos + index,
+      }))
+    )
 
-  await supabase.from('tasks').insert(
-    lines.map((title, i) => ({
-      project_id: id,
-      title,
-      status: 'offen',
-      created_by: userName,
-      position: maxPos + i,
-    }))
-  )
+    setShowFavorites(false)
+    loadTasks()
+  }
 
-  setListInput('')
-  setShowListImport(false)
-  loadTasks()
-}
+  const handleListImport = async () => {
+    const lines = listInput.split('\n').map(l => l.trim()).filter(Boolean)
+    if (!lines.length) return
+
+    const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position)) + 1 : 0
+
+    await supabase.from('tasks').insert(
+      lines.map((title, i) => ({
+        project_id: id,
+        title,
+        status: 'offen',
+        created_by: userName,
+        position: maxPos + i,
+      }))
+    )
+
+    setListInput('')
+    setShowListImport(false)
+    loadTasks()
+  }
+
   const isParticipant = participants.some(p => p.user_name === userName)
   const isCreator = project?.creator_name === userName
 
@@ -190,50 +174,6 @@ const handleListImport = async () => {
           Laden ...
         </div>
       </div>
-     {showFavorites && (
-  <div
-    style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 999,
-    }}
-  >
-    <div
-      className="card"
-      style={{
-        width: '90%',
-        maxWidth: '400px',
-        padding: '20px',
-      }}
-    >
-      <h3>Favoriten hinzufügen</h3>
-
-      <p style={{ marginTop: '10px', marginBottom: '20px' }}>
-        Alle Favoriten als Aufgaben übernehmen.
-      </p>
-
-      <button
-        className="btn btn-primary"
-        onClick={addFavoritesToProject}
-        style={{ width: '100%', marginBottom: '10px' }}
-      >
-        Hinzufügen
-      </button>
-
-      <button
-        className="btn btn-ghost"
-        onClick={() => setShowFavorites(false)}
-        style={{ width: '100%' }}
-      >
-        Abbrechen
-      </button>
-    </div>
-  </div>
-)}
       <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
     </div>
   )
@@ -245,13 +185,6 @@ const handleListImport = async () => {
         <p style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Kein Zugriff</p>
         <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>Du bist kein Teilnehmer dieses Projekts.</p>
         <button className="btn btn-ghost" onClick={() => router.push('/dashboard')}>← Dashboard</button>
-<button
-  className="btn btn-ghost"
-  onClick={() => setShowFavorites(true)}
-  style={{ padding: '10px 14px', minHeight: 'auto' }}
->
-  ⭐ Favoriten
-</button>
       </div>
     </div>
   )
@@ -260,13 +193,8 @@ const handleListImport = async () => {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
 
-     <main
-  style={{
-    maxWidth: '900px',
-    margin: '0 auto',
-    padding: '20px 16px 140px 16px'
-  }}
->
+      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '20px 16px 140px 16px' }}>
+
         {/* Back + title */}
         <div style={{ marginBottom: '20px' }}>
           <button
@@ -320,7 +248,6 @@ const handleListImport = async () => {
 
         {/* Filters + search + add */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Status filter tabs */}
           <div style={{ display: 'flex', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '3px', gap: '3px' }}>
             {statusFilters.map(f => (
               <button
@@ -347,29 +274,15 @@ const handleListImport = async () => {
             style={{ flex: 1, minWidth: '150px' }}
           />
 
-         <button
-  className="btn btn-primary"
-  onClick={() => setShowAddTask(true)}
-  style={{ padding: '10px 14px', minHeight: 'auto', whiteSpace: 'nowrap' }}
->
-  <Plus size={16} /> Aufgabe
-</button>
+          <button className="btn btn-primary" onClick={() => setShowAddTask(true)} style={{ padding: '10px 14px', minHeight: 'auto', whiteSpace: 'nowrap' }}>
+            <Plus size={16} /> Aufgabe
+          </button>
 
-<button
-  className="btn btn-ghost"
-  onClick={addFavoritesToProject}
-  style={{ padding: '10px 14px', minHeight: 'auto' }}
->
-  ⭐ Favoriten
-</button>
-         
+          <button className="btn btn-ghost" onClick={() => setShowFavorites(true)} style={{ padding: '10px 14px', minHeight: 'auto' }}>
+            ⭐ Favoriten
+          </button>
 
-          <button
-            className="btn btn-ghost"
-            onClick={() => setShowListImport(!showListImport)}
-            style={{ padding: '10px 12px', minHeight: 'auto' }}
-            title="Liste einfügen"
-          >
+          <button className="btn btn-ghost" onClick={() => setShowListImport(!showListImport)} style={{ padding: '10px 12px', minHeight: 'auto' }} title="Liste einfügen">
             <ListPlus size={16} />
           </button>
         </div>
@@ -395,111 +308,76 @@ const handleListImport = async () => {
           </div>
         )}
 
-       {/* Task list */}
-{filteredTasks.length === 0 ? (
-  <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)' }}>
-    <p style={{ fontSize: '15px', marginBottom: '8px' }}>
-      Keine Aufgaben gefunden
-    </p>
-  </div>
-) : (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {/* Task list */}
+        {filteredTasks.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)' }}>
+            <p style={{ fontSize: '15px', marginBottom: '8px' }}>Keine Aufgaben gefunden</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-    {/* IN ARBEIT */}
-    {filteredTasks.some(t => t.status === 'in_arbeit') && (
-      <>
-        <div
-          style={{
-            background: 'rgba(245,158,11,0.15)',
-            color: '#f59e0b',
-            padding: '10px 14px',
-            borderRadius: '10px',
-            fontWeight: 800,
-            fontSize: '16px',
-          }}
-        >
-          🔶 In Arbeit
+            {/* IN ARBEIT */}
+            {filteredTasks.some(t => t.status === 'in_arbeit') && (
+              <>
+                <div style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '10px 14px', borderRadius: '10px', fontWeight: 800, fontSize: '16px' }}>
+                  🔶 In Arbeit
+                </div>
+                {filteredTasks.filter(t => t.status === 'in_arbeit').map(task => (
+                  <TaskCard key={task.id} task={task} projectId={id} userName={userName!} onStatusChange={(status) => handleStatusChange(task, status)} onUpdated={loadTasks} />
+                ))}
+              </>
+            )}
+
+            {/* OFFEN */}
+            {filteredTasks.some(t => t.status === 'offen') && (
+              <>
+                <div style={{ background: 'rgba(148,163,184,0.15)', color: '#94a3b8', padding: '10px 14px', borderRadius: '10px', fontWeight: 800, fontSize: '16px', marginTop: '8px' }}>
+                  ⬜ Offen
+                </div>
+                {filteredTasks.filter(t => t.status === 'offen').map(task => (
+                  <TaskCard key={task.id} task={task} projectId={id} userName={userName!} onStatusChange={(status) => handleStatusChange(task, status)} onUpdated={loadTasks} />
+                ))}
+              </>
+            )}
+
+            {/* ERLEDIGT */}
+            {filteredTasks.some(t => t.status === 'erledigt') && (
+              <>
+                <div style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', padding: '10px 14px', borderRadius: '10px', fontWeight: 800, fontSize: '16px', marginTop: '8px' }}>
+                  ✅ Erledigt
+                </div>
+                {filteredTasks.filter(t => t.status === 'erledigt').map(task => (
+                  <TaskCard key={task.id} task={task} projectId={id} userName={userName!} onStatusChange={(status) => handleStatusChange(task, status)} onUpdated={loadTasks} />
+                ))}
+              </>
+            )}
+
+          </div>
+        )}
+      </main>
+
+      {/* Favorites Modal */}
+      {showFavorites && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div className="card" style={{ width: '90%', maxWidth: '400px', padding: '20px' }}>
+            <h3>Favoriten hinzufügen</h3>
+            <p style={{ marginTop: '10px', marginBottom: '20px' }}>Alle Favoriten als Aufgaben übernehmen.</p>
+            <button className="btn btn-primary" onClick={addFavoritesToProject} style={{ width: '100%', marginBottom: '10px' }}>
+              Hinzufügen
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowFavorites(false)} style={{ width: '100%' }}>
+              Abbrechen
+            </button>
+          </div>
         </div>
+      )}
 
-        {filteredTasks
-          .filter(t => t.status === 'in_arbeit')
-          .map(task => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              projectId={id}
-              userName={userName!}
-              onStatusChange={(status) => handleStatusChange(task, status)}
-              onUpdated={loadTasks}
-            />
-          ))}
-      </>
-    )}
+      {showActivity && <ActivityModal projectId={id} onClose={() => setShowActivity(false)} />}
+      {showEditProject && <EditProjectModal project={project} onClose={() => setShowEditProject(false)} onUpdated={loadProject} />}
+      {showAddTask && <AddTaskModal projectId={id} userName={userName!} taskCount={tasks.length} onClose={() => setShowAddTask(false)} onAdded={loadTasks} />}
+      {showParticipants && <ManageParticipantsModal projectId={id} currentUser={userName!} onClose={() => setShowParticipants(false)} />}
 
-    {/* OFFEN */}
-    {filteredTasks.some(t => t.status === 'offen') && (
-      <>
-        <div
-          style={{
-            background: 'rgba(148,163,184,0.15)',
-            color: '#94a3b8',
-            padding: '10px 14px',
-            borderRadius: '10px',
-            fontWeight: 800,
-            fontSize: '16px',
-            marginTop: '8px',
-          }}
-        >
-          ⬜ Offen
-        </div>
-
-        {filteredTasks
-          .filter(t => t.status === 'offen')
-          .map(task => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              projectId={id}
-              userName={userName!}
-              onStatusChange={(status) => handleStatusChange(task, status)}
-              onUpdated={loadTasks}
-            />
-          ))}
-      </>
-    )}
-
-    {/* ERLEDIGT */}
-    {filteredTasks.some(t => t.status === 'erledigt') && (
-      <>
-        <div
-          style={{
-            background: 'rgba(16,185,129,0.15)',
-            color: '#10b981',
-            padding: '10px 14px',
-            borderRadius: '10px',
-            fontWeight: 800,
-            fontSize: '16px',
-            marginTop: '8px',
-          }}
-        >
-          ✅ Erledigt
-        </div>
-
-        {filteredTasks
-          .filter(t => t.status === 'erledigt')
-          .map(task => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              projectId={id}
-              userName={userName!}
-              onStatusChange={(status) => handleStatusChange(task, status)}
-              onUpdated={loadTasks}
-            />
-          ))}
-      </>
-    )}
-
-  </div>
-)}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
+    </div>
+  )
 }
