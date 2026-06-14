@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { supabase } from '@/lib/supabase'
 import Navbar from '@/components/ui/Navbar'
-import { BookTemplate, ChevronRight, Edit, Trash2, Plus, X, ArrowUp, ArrowDown, Save } from 'lucide-react'
+import { BookTemplate, ChevronRight, Edit, Trash2, Plus, X, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface Template {
   id: string
@@ -49,6 +49,7 @@ export default function TemplatesPage() {
   const loadTemplates = async () => {
     if (!userName) return
     setLoading(true)
+    // Vorlagen laden
     const { data, error } = await supabase
       .from('templates')
       .select('*')
@@ -56,7 +57,7 @@ export default function TemplatesPage() {
       .order('created_at', { ascending: false })
     if (!error && data) {
       setTemplates(data)
-      // Lade Aufgaben für jede Vorlage
+      // Aufgaben für jede Vorlage laden
       const tasksMap: Record<string, TemplateTask[]> = {}
       for (const t of data) {
         const { data: tasks } = await supabase
@@ -179,10 +180,11 @@ export default function TemplatesPage() {
     if (!userName) return
     setCreatingProject(template.id)
     try {
+      // 1. Projekt erstellen
       const { data: newProject, error: projectError } = await supabase
         .from('projects')
         .insert({
-          name: `${template.name}`,
+          name: template.name,
           commissioning_date: null,
           creator_name: userName,
           archived: false,
@@ -190,10 +192,12 @@ export default function TemplatesPage() {
         .select()
         .single()
       if (projectError || !newProject) throw new Error('Projekt konnte nicht erstellt werden')
+      // 2. Teilnehmer (Ersteller) hinzufügen
       await supabase.from('project_participants').insert({
         project_id: newProject.id,
         user_name: userName,
       })
+      // 3. Aufgaben der Vorlage kopieren
       const { data: tasks } = await supabase
         .from('template_tasks')
         .select('title, description, position')
@@ -220,57 +224,65 @@ export default function TemplatesPage() {
     }
   }
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
-      <Navbar />
-      <div style={{ textAlign: 'center', padding: '80px' }}>Laden...</div>
-    </div>
-  )
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+        <Navbar />
+        <div style={{ textAlign: 'center', padding: '80px' }}>Laden...</div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '800px', margin: '0 auto', padding: '24px 16px 80px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Projektvorlagen</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Verwalte Vorlagen – beim Erstellen eines Projekts werden alle Aufgaben übernommen.</p>
+      <main style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px 80px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <BookTemplate size={22} style={{ color: 'var(--accent-light)' }} />
+            <h1 style={{ fontSize: '22px', fontWeight: 800 }}>Projektvorlagen</h1>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ padding: '8px 16px' }}>
+          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ padding: '6px 12px' }}>
             <Plus size={16} /> Neue Vorlage
           </button>
         </div>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '24px' }}>
+          Wähle beim Erstellen eines Projekts eine Vorlage — Aufgaben werden automatisch übernommen.
+        </p>
 
         {templates.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
             <BookTemplate size={48} style={{ color: 'var(--text-muted)', marginBottom: '12px' }} />
-            <p>Noch keine Vorlagen vorhanden</p>
-            <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ marginTop: '12px' }}>Erste Vorlage erstellen</button>
+            <p>Keine Vorlagen vorhanden</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {templates.map(template => {
               const tasks = tasksByTemplate[template.id] || []
               return (
                 <div key={template.id} className="card" style={{ padding: '18px 20px' }}>
-                  {/* Kopf mit Titel, Beschreibung, Aktionen */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                     <div>
-                      <h2 style={{ fontSize: '18px', fontWeight: 700 }}>{template.name}</h2>
-                      {template.description && <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>{template.description}</p>}
+                      <h2 style={{ fontSize: '17px', fontWeight: 700 }}>{template.name}</h2>
+                      {template.description && (
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{template.description}</p>
+                      )}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button className="btn btn-ghost" onClick={() => openEdit(template)} style={{ padding: '4px 8px' }}><Edit size={16} /></button>
-                      <button className="btn btn-ghost" onClick={() => deleteTemplate(template.id)} style={{ padding: '4px 8px', color: 'var(--danger)' }}><Trash2 size={16} /></button>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button className="btn btn-ghost" onClick={() => openEdit(template)} style={{ padding: '4px 8px' }}>
+                        <Edit size={14} />
+                      </button>
+                      <button className="btn btn-ghost" onClick={() => deleteTemplate(template.id)} style={{ padding: '4px 8px', color: 'var(--danger)' }}>
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
 
-                  {/* Aufgabenliste (erste 5) wie in der alten Version */}
-                  <div style={{ marginBottom: '16px' }}>
-                    {tasks.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Keine Aufgaben</p>}
+                  {/* Aufgabenliste – genau wie in der alten Version */}
+                  <div style={{ marginBottom: '14px' }}>
                     {tasks.slice(0, 5).map(task => (
-                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                        <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent)' }} />
+                      <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
                         <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{task.title}</span>
                       </div>
                     ))}
@@ -279,17 +291,19 @@ export default function TemplatesPage() {
                         + {tasks.length - 5} weitere ...
                       </p>
                     )}
+                    {tasks.length === 0 && (
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Keine Aufgaben</p>
+                    )}
                   </div>
 
-                  {/* Button zum Erstellen eines Projekts */}
                   <button
                     className="btn btn-primary"
                     onClick={() => createProjectFromTemplate(template)}
                     disabled={creatingProject === template.id}
-                    style={{ width: '100%', padding: '10px' }}
+                    style={{ marginTop: '0', width: '100%', padding: '10px' }}
                   >
                     {creatingProject === template.id ? 'Wird erstellt...' : 'Neues Projekt mit dieser Vorlage'}
-                    <ChevronRight size={16} style={{ marginLeft: '6px' }} />
+                    <ChevronRight size={15} style={{ marginLeft: '6px' }} />
                   </button>
                 </div>
               )
