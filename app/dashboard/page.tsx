@@ -8,7 +8,7 @@ import { Project, ProjectParticipant } from '@/types'
 import Navbar from '@/components/ui/Navbar'
 import ProgressBar from '@/components/ui/ProgressBar'
 import CreateProjectModal from '@/components/CreateProjectModal'
-import { Plus, Search, Archive, RotateCcw, Copy, Trash2, FolderOpen, ArchiveRestore } from 'lucide-react'
+import { Plus, Search, Archive, Copy, Trash2, FolderOpen, ArchiveRestore, X } from 'lucide-react'
 
 interface ProjectWithStats extends Project {
   participants: ProjectParticipant[]
@@ -47,7 +47,6 @@ export default function DashboardPage() {
     if (!userName) return
     setLoading(true)
     try {
-      // Get projects where user is participant
       const { data: participantData } = await supabase
         .from('project_participants')
         .select('project_id')
@@ -69,7 +68,6 @@ export default function DashboardPage() {
 
       if (!projectsData) { setProjects([]); setLoading(false); return }
 
-      // Get participants and tasks for all projects
       const [{ data: allParticipants }, { data: allTasks }] = await Promise.all([
         supabase.from('project_participants').select('*').in('project_id', projectIds),
         supabase.from('tasks').select('id, project_id, status').in('project_id', projectIds),
@@ -107,7 +105,6 @@ export default function DashboardPage() {
 
     if (!newProject) return
 
-    // Copy participants
     const { data: origParticipants } = await supabase
       .from('project_participants')
       .select('user_name')
@@ -119,7 +116,6 @@ export default function DashboardPage() {
       )
     }
 
-    // Copy tasks
     const { data: origTasks } = await supabase
       .from('tasks')
       .select('*')
@@ -148,7 +144,6 @@ export default function DashboardPage() {
     const project = projects.find(p => p.id === deleteTarget)
     if (!project || deleteConfirmName !== project.name) return
 
-    // Delete in order (RLS must allow this)
     await supabase.from('activity_log').delete().eq('project_id', deleteTarget)
     await supabase.from('comments').delete().eq('project_id', deleteTarget)
     await supabase.from('tasks').delete().eq('project_id', deleteTarget)
@@ -173,65 +168,90 @@ export default function DashboardPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
 
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 16px' }}>
+      <main style={{ width: '100%', maxWidth: '100%', padding: '16px' }}>
+
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div>
-            <h1 style={{ color: 'var(--text-primary)', fontSize: '24px', fontWeight: 800 }}>
+            <h1 style={{ color: 'var(--text-primary)', fontSize: 'clamp(18px, 5vw, 24px)', fontWeight: 800 }}>
               Hallo, {userName} 👋
             </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '2px' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '2px' }}>
               {activeCount} aktive{activeCount !== 1 ? '' : 's'} Projekt{activeCount !== 1 ? 'e' : ''}
             </p>
           </div>
           <button
             className="btn btn-primary"
             onClick={() => setShowCreateModal(true)}
-            style={{ padding: '12px 20px', fontSize: '15px' }}
+            style={{ padding: '10px 14px', fontSize: '14px', borderRadius: '10px', whiteSpace: 'nowrap' }}
           >
-            <Plus size={18} /> Neues Projekt
+            <Plus size={16} /> Neu
           </button>
         </div>
 
-        {/* Search + tabs */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input
-              className="input"
-              type="text"
-              placeholder="Projekt suchen ..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ paddingLeft: '36px' }}
-            />
-          </div>
-          <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border)', padding: '3px', gap: '3px' }}>
-            <button
-              onClick={() => setShowArchived(false)}
-              style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, minHeight: 'auto', background: !showArchived ? 'var(--accent)' : 'transparent', color: !showArchived ? 'white' : 'var(--text-secondary)', transition: 'all 0.15s' }}
-            >
-              Aktiv ({activeCount})
-            </button>
-            <button
-              onClick={() => setShowArchived(true)}
-              style={{ padding: '7px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600, minHeight: 'auto', background: showArchived ? 'var(--accent)' : 'transparent', color: showArchived ? 'white' : 'var(--text-secondary)', transition: 'all 0.15s' }}
-            >
-              Archiv ({archivedCount})
-            </button>
-          </div>
+        {/* Search */}
+        <div style={{ position: 'relative', marginBottom: '12px' }}>
+          <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            className="input"
+            type="text"
+            placeholder="Projekt suchen ..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ paddingLeft: '36px', fontSize: '15px' }}
+          />
         </div>
 
-        {/* Projects grid */}
+        {/* Tabs */}
+        <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderRadius: '10px', border: '1px solid var(--border)', padding: '3px', gap: '3px', marginBottom: '16px' }}>
+          <button
+            onClick={() => setShowArchived(false)}
+            style={{
+              flex: 1,
+              padding: '9px',
+              borderRadius: '7px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 600,
+              minHeight: 'auto',
+              background: !showArchived ? 'var(--accent)' : 'transparent',
+              color: !showArchived ? 'white' : 'var(--text-secondary)',
+              transition: 'all 0.15s'
+            }}
+          >
+            Aktiv ({activeCount})
+          </button>
+          <button
+            onClick={() => setShowArchived(true)}
+            style={{
+              flex: 1,
+              padding: '9px',
+              borderRadius: '7px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 600,
+              minHeight: 'auto',
+              background: showArchived ? 'var(--accent)' : 'transparent',
+              color: showArchived ? 'white' : 'var(--text-secondary)',
+              transition: 'all 0.15s'
+            }}
+          >
+            Archiv ({archivedCount})
+          </button>
+        </div>
+
+        {/* Projects list */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
-            Projekte laden ...
+            <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+            Laden ...
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <FolderOpen size={48} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
-            <p style={{ color: 'var(--text-secondary)', fontSize: '16px', fontWeight: 600 }}>
+            <FolderOpen size={44} style={{ color: 'var(--text-muted)', margin: '0 auto 12px', display: 'block' }} />
+            <p style={{ color: 'var(--text-secondary)', fontSize: '15px', fontWeight: 600 }}>
               {search ? 'Keine Projekte gefunden' : showArchived ? 'Kein Archiv vorhanden' : 'Noch keine Projekte'}
             </p>
             {!showArchived && !search && (
@@ -241,19 +261,17 @@ export default function DashboardPage() {
             )}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {filtered.map(project => (
               <div
                 key={project.id}
                 className="card"
-                style={{ padding: '20px', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                style={{ padding: '16px', cursor: 'pointer', width: '100%' }}
                 onClick={() => router.push(`/project/${project.id}`)}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)' }}
               >
-                {/* Project header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '16px', flex: 1, paddingRight: '8px' }}>
+                {/* Top row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '15px', flex: 1, paddingRight: '8px', lineHeight: 1.3 }}>
                     {project.name}
                   </h3>
                   {project.archived && (
@@ -264,69 +282,71 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Meta */}
-                <div style={{ marginBottom: '14px' }}>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '10px', flexWrap: 'wrap' }}>
                   {project.commissioning_date && (
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '3px' }}>
-                      📅 IBN: {new Date(project.commissioning_date).toLocaleDateString('de-AT')}
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
+                      📅 {new Date(project.commissioning_date).toLocaleDateString('de-AT')}
                     </p>
                   )}
                   <p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-                    Erstellt von {project.creator_name}
+                    von {project.creator_name}
                   </p>
                 </div>
 
                 {/* Progress */}
                 {project.task_count > 0 && (
-                  <div style={{ marginBottom: '14px' }}>
+                  <div style={{ marginBottom: '10px' }}>
                     <ProgressBar done={project.done_count} total={project.task_count} />
                   </div>
                 )}
 
-                {/* Participants */}
-                {project.participants.length > 0 && (
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                    {project.participants.slice(0, 5).map(p => (
-                      <span key={p.id} style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '11px', fontWeight: 800, border: '2px solid var(--bg-card)' }}>
+                {/* Bottom row: participants + actions */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                  {/* Participants */}
+                  <div style={{ display: 'flex', gap: '3px' }}>
+                    {project.participants.slice(0, 4).map(p => (
+                      <span key={p.id} style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 800, border: '2px solid var(--bg-card)' }}>
                         {p.user_name.charAt(0).toUpperCase()}
                       </span>
                     ))}
-                    {project.participants.length > 5 && (
-                      <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 800 }}>
-                        +{project.participants.length - 5}
+                    {project.participants.length > 4 && (
+                      <span style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '10px', fontWeight: 800 }}>
+                        +{project.participants.length - 4}
                       </span>
                     )}
                   </div>
-                )}
 
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: '6px', paddingTop: '12px', borderTop: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-                  <button
-                    className="btn btn-ghost"
-                    onClick={() => handleArchive(project.id, project.archived)}
-                    style={{ flex: 1, padding: '8px', fontSize: '12px', minHeight: 'auto' }}
-                    title={project.archived ? 'Wiederherstellen' : 'Archivieren'}
-                  >
-                    {project.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-                    {project.archived ? 'Wiederherstellen' : 'Archivieren'}
-                  </button>
-                  <button
-                    className="btn btn-ghost"
-                    onClick={() => handleDuplicate(project)}
-                    style={{ padding: '8px 10px', minHeight: 'auto' }}
-                    title="Duplizieren"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  {project.creator_name === userName && (
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: '6px' }}>
                     <button
-                      className="btn"
-                      onClick={() => { setDeleteTarget(project.id); setDeleteConfirmName('') }}
-                      style={{ padding: '8px 10px', minHeight: 'auto', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.2)' }}
-                      title="Löschen"
+                      className="btn btn-ghost"
+                      onClick={() => handleArchive(project.id, project.archived)}
+                      style={{ padding: '7px 10px', fontSize: '12px', minHeight: 'auto', gap: '4px' }}
                     >
-                      <Trash2 size={14} />
+                      {project.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+                      <span style={{ display: 'none' }} className="btn-label">
+                        {project.archived ? 'Wiederherstellen' : 'Archivieren'}
+                      </span>
                     </button>
-                  )}
+                    <button
+                      className="btn btn-ghost"
+                      onClick={() => handleDuplicate(project)}
+                      style={{ padding: '7px 10px', minHeight: 'auto' }}
+                      title="Duplizieren"
+                    >
+                      <Copy size={13} />
+                    </button>
+                    {project.creator_name === userName && (
+                      <button
+                        className="btn"
+                        onClick={() => { setDeleteTarget(project.id); setDeleteConfirmName('') }}
+                        style={{ padding: '7px 10px', minHeight: 'auto', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.2)' }}
+                        title="Löschen"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -334,20 +354,25 @@ export default function DashboardPage() {
         )}
       </main>
 
-      {/* Delete confirmation modal */}
+      {/* Delete modal */}
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
-          <div className="modal-box" onClick={e => e.stopPropagation()}>
-            <h2 style={{ color: 'var(--danger)', fontSize: '20px', fontWeight: 800, marginBottom: '8px' }}>
-              ⚠️ Projekt löschen
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '16px' }}>
-              Dieser Vorgang kann <strong>nicht rückgängig</strong> gemacht werden. Alle Aufgaben, Kommentare und der Verlauf werden gelöscht.
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ margin: '0 12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h2 style={{ color: 'var(--danger)', fontSize: '18px', fontWeight: 800 }}>
+                ⚠️ Projekt löschen
+              </h2>
+              <button onClick={() => setDeleteTarget(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '14px' }}>
+              Dieser Vorgang kann <strong>nicht rückgängig</strong> gemacht werden.
             </p>
-            <p style={{ color: 'var(--text-primary)', fontSize: '14px', marginBottom: '8px' }}>
-              Tippe den Projektnamen zur Bestätigung:
+            <p style={{ color: 'var(--text-primary)', fontSize: '14px', marginBottom: '6px' }}>
+              Tippe den Projektnamen:
             </p>
-            <p style={{ color: 'var(--accent-light)', fontWeight: 700, fontSize: '15px', marginBottom: '10px' }}>
+            <p style={{ color: 'var(--accent-light)', fontWeight: 700, fontSize: '14px', marginBottom: '10px', wordBreak: 'break-word' }}>
               „{projects.find(p => p.id === deleteTarget)?.name}"
             </p>
             <input
@@ -355,9 +380,9 @@ export default function DashboardPage() {
               value={deleteConfirmName}
               onChange={e => setDeleteConfirmName(e.target.value)}
               placeholder="Projektnamen eingeben ..."
-              style={{ marginBottom: '16px' }}
+              style={{ marginBottom: '14px', fontSize: '15px' }}
             />
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)} style={{ flex: 1 }}>
                 Abbrechen
               </button>
@@ -367,14 +392,13 @@ export default function DashboardPage() {
                 disabled={deleteConfirmName !== projects.find(p => p.id === deleteTarget)?.name}
                 style={{ flex: 1, opacity: deleteConfirmName !== projects.find(p => p.id === deleteTarget)?.name ? 0.4 : 1 }}
               >
-                Endgültig löschen
+                Löschen
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Create project modal */}
       {showCreateModal && (
         <CreateProjectModal
           onClose={() => setShowCreateModal(false)}
@@ -385,7 +409,10 @@ export default function DashboardPage() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        @media (min-width: 640px) { .sm-show { display: inline !important; } }
+        @media (min-width: 768px) {
+          main { padding: 24px 24px !important; max-width: 800px !important; margin: 0 auto !important; }
+          .btn-label { display: inline !important; }
+        }
       `}</style>
     </div>
   )
