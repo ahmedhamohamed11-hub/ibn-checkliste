@@ -275,63 +275,111 @@ export default function ProjectPage() {
           </div>
         )}
 
-        {/* Task list */}
-        {filteredTasks.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)' }}>
-            <p style={{ fontSize: '15px', marginBottom: '8px' }}>
-              {search ? 'Keine Aufgaben gefunden' : filter !== 'alle' ? `Keine ${filter === 'offen' ? 'offenen' : filter === 'in_arbeit' ? 'laufenden' : 'erledigten'} Aufgaben` : 'Noch keine Aufgaben'}
-            </p>
-            {filter === 'alle' && !search && (
-              <button className="btn btn-primary" onClick={() => setShowAddTask(true)} style={{ marginTop: '8px' }}>
-                <Plus size={15} /> Erste Aufgabe
-              </button>
-            )}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {filteredTasks.map(task => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                projectId={id}
-                userName={userName!}
-                onStatusChange={(status) => handleStatusChange(task, status)}
-                onUpdated={loadTasks}
-              />
-            ))}
-          </div>
-        )}
-      </main>
+       {/* Task list */}
+{filteredTasks.length === 0 ? (
+  <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)' }}>
+    <p style={{ fontSize: '15px', marginBottom: '8px' }}>
+      Keine Aufgaben gefunden
+    </p>
+  </div>
+) : (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
-      {showActivity && <ActivityModal projectId={id} onClose={() => setShowActivity(false)} />}
-      {showEditProject && project && (
-        <EditProjectModal
-          project={project}
-          onClose={() => setShowEditProject(false)}
-          onUpdated={loadProject}
-        />
-      )}
-      {showAddTask && (
-        <AddTaskModal
-          projectId={id}
-          userName={userName!}
-          nextPosition={tasks.length}
-          onClose={() => setShowAddTask(false)}
-          onCreated={loadTasks}
-        />
-      )}
-      {showParticipants && (
-        <ManageParticipantsModal
-          projectId={id}
-          participants={participants}
-          isCreator={isCreator}
-          currentUser={userName!}
-          onClose={() => setShowParticipants(false)}
-          onUpdated={loadParticipants}
-        />
-      )}
+    {/* IN ARBEIT */}
+    {filteredTasks.some(t => t.status === 'in_arbeit') && (
+      <>
+        <div
+          style={{
+            background: 'rgba(245,158,11,0.15)',
+            color: '#f59e0b',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            fontWeight: 800,
+            fontSize: '16px',
+          }}
+        >
+          🔶 In Arbeit
+        </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
-    </div>
-  )
+        {filteredTasks
+          .filter(t => t.status === 'in_arbeit')
+          .map(task => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              projectId={id}
+              userName={userName!}
+              onStatusChange={(status) => handleStatusChange(task, status)}
+              onUpdated={loadTasks}
+            />
+          ))}
+      </>
+    )}
+
+    {/* OFFEN */}
+    {filteredTasks.some(t => t.status === 'offen') && (
+      <>
+        <div
+          style={{
+            background: 'rgba(148,163,184,0.15)',
+            color: '#94a3b8',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            fontWeight: 800,
+            fontSize: '16px',
+            marginTop: '8px',
+          }}
+        >
+          ⬜ Offen
+        </div>
+
+        {filteredTasks
+          .filter(t => t.status === 'offen')
+          .map(task => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              projectId={id}
+              userName={userName!}
+              onStatusChange={(status) => handleStatusChange(task, status)}
+              onUpdated={loadTasks}
+            />
+          ))}
+      </>
+    )}
+
+    {/* ERLEDIGT */}
+    {filteredTasks.some(t => t.status === 'erledigt') && (
+      <>
+        <div
+          style={{
+            background: 'rgba(16,185,129,0.15)',
+            color: '#10b981',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            fontWeight: 800,
+            fontSize: '16px',
+            marginTop: '8px',
+          }}
+        >
+          ✅ Erledigt
+        </div>
+
+        {filteredTasks
+          .filter(t => t.status === 'erledigt')
+          .map(task => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              projectId={id}
+              userName={userName!}
+              onStatusChange={(status) => handleStatusChange(task, status)}
+              onUpdated={loadTasks}
+            />
+          ))}
+      </>
+    )}
+
+  </div>
+)}
 }
