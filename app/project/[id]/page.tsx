@@ -36,6 +36,7 @@ export default function ProjectPage() {
   const [showParticipants, setShowParticipants] = useState(false)
   const [listInput, setListInput] = useState('')
   const [showListImport, setShowListImport] = useState(false)
+  const [showFavorites, setShowFavorites] = useState(false)
 
   useEffect(() => {
     if (!userName) { router.push('/'); return }
@@ -91,8 +92,33 @@ export default function ProjectPage() {
     })
     loadTasks()
   }
+ {const addFavoritesToProject = async () => {
+  const { data } = await supabase
+    .from('favorites')
+    .select('*')
 
-  const handleListImport = async () => {
+  if (!data?.length) return
+
+  const maxPos =
+    tasks.length > 0
+      ? Math.max(...tasks.map(t => t.position)) + 1
+      : 0
+
+  await supabase.from('tasks').insert(
+    data.map((fav, index) => ({
+      project_id: id,
+      title: fav.title,
+      status: 'offen',
+      created_by: userName,
+      position: maxPos + index,
+    }))
+  )
+
+  loadTasks()
+  setShowFavorites(false)
+}
+  const handleListImport = async ()
+  
     const lines = listInput.split('\n').map(l => l.trim()).filter(Boolean)
     if (!lines.length) return
     const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position)) + 1 : 0
@@ -140,6 +166,50 @@ export default function ProjectPage() {
           Laden ...
         </div>
       </div>
+     {showFavorites && (
+  <div
+    style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 999,
+    }}
+  >
+    <div
+      className="card"
+      style={{
+        width: '90%',
+        maxWidth: '400px',
+        padding: '20px',
+      }}
+    >
+      <h3>Favoriten hinzufügen</h3>
+
+      <p style={{ marginTop: '10px', marginBottom: '20px' }}>
+        Alle Favoriten als Aufgaben übernehmen.
+      </p>
+
+      <button
+        className="btn btn-primary"
+        onClick={addFavoritesToProject}
+        style={{ width: '100%', marginBottom: '10px' }}
+      >
+        Hinzufügen
+      </button>
+
+      <button
+        className="btn btn-ghost"
+        onClick={() => setShowFavorites(false)}
+        style={{ width: '100%' }}
+      >
+        Abbrechen
+      </button>
+    </div>
+  </div>
+)}
       <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
     </div>
   )
@@ -151,6 +221,13 @@ export default function ProjectPage() {
         <p style={{ fontSize: '18px', fontWeight: 700, marginBottom: '8px' }}>Kein Zugriff</p>
         <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '20px' }}>Du bist kein Teilnehmer dieses Projekts.</p>
         <button className="btn btn-ghost" onClick={() => router.push('/dashboard')}>← Dashboard</button>
+<button
+  className="btn btn-ghost"
+  onClick={() => setShowFavorites(true)}
+  style={{ padding: '10px 14px', minHeight: 'auto' }}
+>
+  ⭐ Favoriten
+</button>
       </div>
     </div>
   )
@@ -242,7 +319,13 @@ export default function ProjectPage() {
 
           <button className="btn btn-primary" onClick={() => setShowAddTask(true)} style={{ padding: '10px 14px', minHeight: 'auto', whiteSpace: 'nowrap' }}>
             <Plus size={16} /> Aufgabe
-          </button>
+            <button
+  className="btn btn-ghost"
+  onClick={addFavoritesToProject}
+>
+  ⭐ Favoriten
+</button>
+         
 
           <button
             className="btn btn-ghost"
