@@ -46,7 +46,6 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
       .order('position', { ascending: true })
     if (!error && data) {
       setFavorites(data)
-      // Standardmäßig nichts auswählen
       setSelectedFavoriteIds(new Set())
     } else {
       setFavorites([])
@@ -122,14 +121,15 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
     if (selectedFavorites.length === 0) return
 
     setLoading(true)
-    const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position)) + 1 : 0
-    const newTasks = selectedFavorites.map((fav, idx) => ({
+    // nextPosition ist die nächste freie Position im aktuellen Projekt
+    let currentPos = nextPosition
+    const newTasks = selectedFavorites.map((fav) => ({
       project_id: projectId,
       title: fav.title,
       description: null,
       status: 'offen',
       created_by: userName,
-      position: maxPos + idx,
+      position: currentPos++,
     }))
 
     const { error: insertError } = await supabase.from('tasks').insert(newTasks)
@@ -139,7 +139,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
       return
     }
 
-    // Aktivitäten loggen (eine pro Aufgabe oder eine Sammelmeldung)
+    // Aktivitäten loggen (eine pro Aufgabe)
     for (const fav of selectedFavorites) {
       await supabase.from('activity_log').insert({
         project_id: projectId,
@@ -268,7 +268,10 @@ export default function ProjectPage() {
   const [importingFavorites, setImportingFavorites] = useState(false)
 
   useEffect(() => {
-    if (!userName) { router.push('/'); return }
+    if (!userName) {
+      router.push('/')
+      return
+    }
     loadAll()
   }, [id, userName])
 
@@ -280,7 +283,9 @@ export default function ProjectPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: `id=eq.${id}` }, () => loadProject())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'project_participants', filter: `project_id=eq.${id}` }, () => loadParticipants())
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [id])
 
   const loadAll = async () => {
@@ -290,17 +295,20 @@ export default function ProjectPage() {
   }
 
   const loadProject = async () => {
-    const { data } = await supabase.from('projects').select('*').eq('id', id).single()
+    const { data, error } = await supabase.from('projects').select('*').eq('id', id).single()
+    if (error) console.error('Fehler beim Laden des Projekts:', error)
     if (data) setProject(data)
   }
 
   const loadTasks = async () => {
-    const { data } = await supabase.from('tasks').select('*').eq('project_id', id).order('position')
+    const { data, error } = await supabase.from('tasks').select('*').eq('project_id', id).order('position')
+    if (error) console.error('Fehler beim Laden der Aufgaben:', error)
     if (data) setTasks(data)
   }
 
   const loadParticipants = async () => {
-    const { data } = await supabase.from('project_participants').select('*').eq('project_id', id)
+    const { data, error } = await supabase.from('project_participants').select('*').eq('project_id', id)
+    if (error) console.error('Fehler beim Laden der Teilnehmer:', error)
     if (data) setParticipants(data)
   }
 
@@ -316,7 +324,9 @@ export default function ProjectPage() {
 
     const actionMap = { offen: 'auf Offen gesetzt', in_arbeit: 'in Bearbeitung', erledigt: 'erledigt' }
     await supabase.from('activity_log').insert({
-      project_id: id, task_id: task.id, actor: userName,
+      project_id: id,
+      task_id: task.id,
+      actor: userName,
       action: `Aufgabe ${actionMap[newStatus]}`,
       detail: task.title,
     })
@@ -329,12 +339,16 @@ export default function ProjectPage() {
     const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position)) + 1 : 0
     await supabase.from('tasks').insert(
       lines.map((title, i) => ({
-        project_id: id, title, status: 'offen',
-        created_by: userName, position: maxPos + i,
+        project_id: id,
+        title,
+        status: 'offen',
+        created_by: userName,
+        position: maxPos + i,
       }))
     )
     await supabase.from('activity_log').insert({
-      project_id: id, actor: userName,
+      project_id: id,
+      actor: userName,
       action: `${lines.length} Aufgaben importiert`,
       detail: lines.join(', '),
     })
@@ -343,7 +357,7 @@ export default function ProjectPage() {
     loadTasks()
   }
 
-  // Alle Favoriten auf einmal importieren (zusätzlicher Button auf der Hauptseite)
+  // Alle Favoriten auf einmal importieren
   const handleImportAllFavorites = async () => {
     if (!userName) return
     setImportingFavorites(true)
@@ -409,24 +423,26 @@ export default function ProjectPage() {
     { value: 'erledigt', label: 'Erledigt', count: doneCount, color: '#10b981' },
   ] as const
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
-      <Navbar />
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
-        <div>Laden...</div>
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+        <Navbar />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>Laden...</div>
       </div>
-    </div>
-  )
+    )
+  }
 
-  if (!project || !isParticipant) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
-      <Navbar />
-      <div style={{ textAlign: 'center', padding: '80px 20px' }}>
-        <p>Kein Zugriff</p>
-        <button className="btn btn-ghost" onClick={() => router.push('/dashboard')}>← Dashboard</button>
+  if (!project || !isParticipant) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+        <Navbar />
+        <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+          <p>Kein Zugriff</p>
+          <button className="btn btn-ghost" onClick={() => router.push('/dashboard')}>← Dashboard</button>
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
@@ -434,7 +450,10 @@ export default function ProjectPage() {
       <main style={{ maxWidth: '900px', margin: '0 auto', padding: '20px 16px 40px' }}>
         {/* Header */}
         <div style={{ marginBottom: '20px' }}>
-          <button onClick={() => router.push('/dashboard')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', marginBottom: '12px' }}>
+          <button
+            onClick={() => router.push('/dashboard')}
+            style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', marginBottom: '12px' }}
+          >
             <ArrowLeft size={16} /> Dashboard
           </button>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
@@ -467,24 +486,60 @@ export default function ProjectPage() {
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display: 'flex', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '2px', flexWrap: 'wrap' }}>
             {statusFilters.map(f => (
-              <button key={f.value} onClick={() => setFilter(f.value)} style={{
-                padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
-                background: filter === f.value ? 'var(--accent)' : 'transparent',
-                color: filter === f.value ? 'white' : f.color,
-              }}>{f.label} ({f.count})</button>
+              <button
+                key={f.value}
+                onClick={() => setFilter(f.value)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  background: filter === f.value ? 'var(--accent)' : 'transparent',
+                  color: filter === f.value ? 'white' : f.color,
+                }}
+              >
+                {f.label} ({f.count})
+              </button>
             ))}
           </div>
-          <input className="input" placeholder="Suchen..." value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, minWidth: '140px', fontSize: '13px', padding: '6px 10px' }} />
-          <button className="btn btn-primary" onClick={() => setShowAddTask(true)} style={{ padding: '6px 12px', fontSize: '13px', whiteSpace: 'nowrap' }}><Plus size={14} /> Aufgabe</button>
-          <button className="btn btn-secondary" onClick={handleImportAllFavorites} disabled={importingFavorites} style={{ padding: '6px 12px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+          <input
+            className="input"
+            placeholder="Suchen..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ flex: 1, minWidth: '140px', fontSize: '13px', padding: '6px 10px' }}
+          />
+          <button className="btn btn-primary" onClick={() => setShowAddTask(true)} style={{ padding: '6px 12px', fontSize: '13px', whiteSpace: 'nowrap' }}>
+            <Plus size={14} /> Aufgabe
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={handleImportAllFavorites}
+            disabled={importingFavorites}
+            style={{ padding: '6px 12px', fontSize: '13px', whiteSpace: 'nowrap' }}
+          >
             <Star size={14} /> {importingFavorites ? '…' : 'Alle Favoriten'}
           </button>
-          <button className="btn btn-ghost" onClick={() => setShowListImport(!showListImport)} style={{ padding: '6px 12px' }} title="Liste importieren"><ListPlus size={16} /></button>
+          <button
+            className="btn btn-ghost"
+            onClick={() => setShowListImport(!showListImport)}
+            style={{ padding: '6px 12px' }}
+            title="Liste importieren"
+          >
+            <ListPlus size={16} />
+          </button>
         </div>
 
         {showListImport && (
           <div className="card" style={{ padding: '12px', marginBottom: '16px' }}>
-            <textarea className="input" value={listInput} onChange={e => setListInput(e.target.value)} placeholder="Eine Aufgabe pro Zeile" rows={3} style={{ marginBottom: '8px', width: '100%' }} />
+            <textarea
+              className="input"
+              value={listInput}
+              onChange={e => setListInput(e.target.value)}
+              placeholder="Eine Aufgabe pro Zeile"
+              rows={3}
+              style={{ marginBottom: '8px', width: '100%' }}
+            />
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button className="btn btn-primary" onClick={handleListImport}>Importieren</button>
               <button className="btn btn-ghost" onClick={() => setShowListImport(false)}>Abbrechen</button>
@@ -495,21 +550,49 @@ export default function ProjectPage() {
         {filteredAndSortedTasks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)' }}>
             <p>Keine Aufgaben</p>
-            {filter === 'alle' && !search && <button className="btn btn-primary" onClick={() => setShowAddTask(true)}>Erste Aufgabe</button>}
+            {filter === 'alle' && !search && (
+              <button className="btn btn-primary" onClick={() => setShowAddTask(true)}>Erste Aufgabe</button>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '20px' }}>
             {filteredAndSortedTasks.map(task => (
-              <TaskCard key={task.id} task={task} projectId={id} userName={userName!} onStatusChange={(status) => handleStatusChange(task, status)} onUpdated={loadTasks} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                projectId={id}
+                userName={userName!}
+                onStatusChange={status => handleStatusChange(task, status)}
+                onUpdated={loadTasks}
+              />
             ))}
           </div>
         )}
       </main>
 
       {showActivity && <ActivityModal projectId={id} onClose={() => setShowActivity(false)} />}
-      {showEditProject && project && <EditProjectModal project={project} onClose={() => setShowEditProject(false)} onUpdated={loadProject} />}
-      {showAddTask && <AddTaskModal projectId={id} userName={userName!} nextPosition={tasks.length} onClose={() => setShowAddTask(false)} onCreated={loadTasks} />}
-      {showParticipants && <ManageParticipantsModal projectId={id} participants={participants} isCreator={isCreator} currentUser={userName!} onClose={() => setShowParticipants(false)} onUpdated={loadParticipants} />}
+      {showEditProject && project && (
+        <EditProjectModal project={project} onClose={() => setShowEditProject(false)} onUpdated={loadProject} />
+      )}
+      {showAddTask && (
+        <AddTaskModal
+          projectId={id}
+          userName={userName!}
+          nextPosition={tasks.length}
+          onClose={() => setShowAddTask(false)}
+          onCreated={loadTasks}
+        />
+      )}
+      {showParticipants && (
+        <ManageParticipantsModal
+          projectId={id}
+          participants={participants}
+          isCreator={isCreator}
+          currentUser={userName!}
+          onClose={() => setShowParticipants(false)}
+          onUpdated={loadParticipants}
+        />
+      )}
 
       <style>{`
         .modal-overlay {
