@@ -81,12 +81,23 @@ const handleStatusChange = async (task: Task, newStatus: TaskStatus) => {
     modified_by: userName,
   }
 
-  if (newStatus === 'erledigt') updates.completed_by = userName!
-  else if (task.status === 'erledigt') updates.completed_by = null
+  if (newStatus === 'erledigt') {
+    updates.completed_by = userName!
+  } else if (task.status === 'erledigt') {
+    updates.completed_by = null
+  }
 
-  await supabase.from('tasks').update(updates).eq('id', task.id)
+  await supabase
+    .from('tasks')
+    .update(updates)
+    .eq('id', task.id)
 
-  const actionMap = { offen: 'auf Offen gesetzt', in_arbeit: 'in Bearbeitung', erledigt: 'erledigt' }
+  const actionMap = {
+    offen: 'auf Offen gesetzt',
+    in_arbeit: 'in Bearbeitung',
+    erledigt: 'erledigt',
+  }
+
   await supabase.from('activity_log').insert({
     project_id: id,
     task_id: task.id,
@@ -121,11 +132,13 @@ const addFavoritesToProject = async () => {
   )
 
   loadTasks()
-  setShowFavorites(false)
 }
 
 const handleListImport = async () => {
-  const lines = listInput.split('\n').map(l => l.trim()).filter(Boolean)
+  const lines = listInput
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
 
   if (!lines.length) return
 
@@ -148,8 +161,6 @@ const handleListImport = async () => {
   setShowListImport(false)
   loadTasks()
 }
-
-
   const isParticipant = participants.some(p => p.user_name === userName)
   const isCreator = project?.creator_name === userName
 
