@@ -114,28 +114,15 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
       }}
     >
       {/* Main row */}
-      <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-        {/* Status buttons */}
-        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-          {statusOrder.map(s => {
-            const c = STATUS_CONFIG[s]
-            const active = task.status === s
-            return (
-              <button
-                key={s}
-                onClick={() => onStatusChange(s)}
-                style={{
-                  padding: '5px 9px', borderRadius: '6px', border: `1px solid ${active ? c.border : 'var(--border)'}`,
-                  background: active ? c.bg : 'transparent', color: active ? c.color : 'var(--text-muted)',
-                  fontSize: '11px', fontWeight: 700, cursor: 'pointer', minHeight: 'auto',
-                  transition: 'all 0.15s', whiteSpace: 'nowrap',
-                }}
-              >
-                {c.label}
-              </button>
-            )
-          })}
-        </div>
+     <div
+  style={{
+    padding: '14px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: '12px',
+  }}
+>
 
        {/* Title */}
 <div
@@ -175,7 +162,28 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
     </p>
   )}
 </div>
-
+   {/* Status buttons */}
+        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+          {statusOrder.map(s => {
+            const c = STATUS_CONFIG[s]
+            const active = task.status === s
+            return (
+              <button
+                key={s}
+                onClick={() => onStatusChange(s)}
+                style={{
+                  padding: '5px 9px', borderRadius: '6px', border: `1px solid ${active ? c.border : 'var(--border)'}`,
+                  background: active ? c.bg : 'transparent', color: active ? c.color : 'var(--text-muted)',
+                  fontSize: '11px', fontWeight: 700, cursor: 'pointer', minHeight: 'auto',
+                  transition: 'all 0.15s', whiteSpace: 'nowrap',
+                }}
+              >
+                {c.label}
+              </button>
+            )
+          })}
+        </div>
+       
         {/* Expand + actions */}
         <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
           {comments.length > 0 && !expanded && (
