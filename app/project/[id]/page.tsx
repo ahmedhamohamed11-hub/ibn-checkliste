@@ -119,7 +119,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
     setLoading(false)
   }
 
-  // Aufgabe aus Favorit erstellen
+  // Aufgabe aus Favorit übernehmen
   const handleCreateFromFavorite = async () => {
     if (!selectedFavoriteId) return
     const selected = favorites.find(f => f.id === selectedFavoriteId)
@@ -253,9 +253,17 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
                 className="btn btn-primary"
                 onClick={handleCreateFromFavorite}
                 disabled={loading || favorites.length === 0 || !selectedFavoriteId}
-                style={{ padding: '8px 16px' }}
+                style={{
+  flex: 1,
+  height: '44px',
+  minHeight: '44px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  whiteSpace: 'nowrap'
+}}
               >
-                {loading ? 'Wird erstellt…' : 'Aufgabe aus Favorit erstellen'}
+                {loading ? 'Wird erstellt…' : 'Aufgabe aus Favorit übernehmen'}
               </button>
             </div>
           </div>
