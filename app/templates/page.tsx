@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { supabase } from '@/lib/supabase'
 import Navbar from '@/components/ui/Navbar'
-import { BookTemplate, ChevronRight, Plus, Edit, Trash2, Save, X, ArrowLeft, GripVertical } from 'lucide-react'
+import { BookTemplate, ChevronRight, Edit, Trash2, Plus, X, ArrowUp, ArrowDown, Save } from 'lucide-react'
 
 interface Template {
   id: string
@@ -57,7 +57,7 @@ export default function TemplatesPage() {
     setLoading(false)
   }
 
-  const loadTemplateTasks = async (templateId: string) => {
+  const loadTemplateTasks = useCallback(async (templateId: string) => {
     const { data, error } = await supabase
       .from('template_tasks')
       .select('*')
@@ -65,101 +65,65 @@ export default function TemplatesPage() {
       .order('position', { ascending: true })
     if (!error && data) setTemplateTasks(data)
     else setTemplateTasks([])
+  }, [])
+
+  const openEdit = async (template: Template) => {
+    setEditingTemplate(template)
+    setTemplateName(template.name)
+    setTemplateDescription(template.description || '')
+    await loadTemplateTasks(template.id)
   }
 
-  const openCreate = () => {
+  const closeEdit = () => {
     setEditingTemplate(null)
     setTemplateName('')
     setTemplateDescription('')
     setTemplateTasks([])
     setNewTaskTitle('')
     setEditingTaskId(null)
-    setShowCreateModal(true)
-  }
-
-  const openEdit = (template: Template) => {
-    setEditingTemplate(template)
-    setTemplateName(template.name)
-    setTemplateDescription(template.description || '')
-    loadTemplateTasks(template.id)
-    setNewTaskTitle('')
-    setEditingTaskId(null)
-    setShowCreateModal(true)
-  }
-
-  const closeModal = () => {
-    setShowCreateModal(false)
-    setEditingTemplate(null)
-    setTemplateTasks([])
   }
 
   const saveTemplate = async () => {
     if (!userName) return
-    if (!templateName.trim()) {
-      alert('Bitte einen Namen eingeben')
-      return
-    }
+    if (!templateName.trim()) return
     setSaving(true)
 
     if (editingTemplate) {
-      // Update existing template
       await supabase
         .from('templates')
-        .update({
-          name: templateName.trim(),
-          description: templateDescription.trim() || null,
-          updated_at: new Date().toISOString()
-        })
+        .update({ name: templateName, description: templateDescription, updated_at: new Date().toISOString() })
         .eq('id', editingTemplate.id)
     } else {
-      // Create new template
-      const { data: newTemplate, error } = await supabase
+      const { data } = await supabase
         .from('templates')
-        .insert({
-          name: templateName.trim(),
-          description: templateDescription.trim() || null,
-          created_by: userName
-        })
+        .insert({ name: templateName, description: templateDescription, created_by: userName })
         .select()
         .single()
-      if (error) {
-        console.error(error)
-        setSaving(false)
-        return
+      if (data) {
+        setEditingTemplate(data)
+        await loadTemplateTasks(data.id)
       }
-      setEditingTemplate(newTemplate)
     }
     await loadTemplates()
-    if (!editingTemplate) {
-      // After creation, we are now in edit mode for the new template
-      // Reload tasks (empty) and keep modal open
-      if (editingTemplate) {
-        await loadTemplateTasks(editingTemplate.id)
-      }
-    }
     setSaving(false)
     if (!editingTemplate) {
-      // For new template, we stay in modal to add tasks
-      // But we need to reload the template list and set editingTemplate to the new one
-      const { data: newT } = await supabase
-        .from('templates')
-        .select('*')
-        .eq('created_by', userName)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-      if (newT) {
-        setEditingTemplate(newT)
-        setTemplateName(newT.name)
-        setTemplateDescription(newT.description || '')
-      }
+      // Nach dem Erstellen einer neuen Vorlage bleibt das Modal offen? Besser schließen oder im Edit-Modus bleiben.
+      // Hier schließen wir es.
+      setShowCreateModal(false)
     }
+  }
+
+  const deleteTemplate = async (id: string) => {
+    if (!confirm('Vorlage wirklich löschen? Alle Aufgaben werden ebenfalls gelöscht.')) return
+    await supabase.from('templates').delete().eq('id', id)
+    await loadTemplates()
+    if (editingTemplate?.id === id) closeEdit()
   }
 
   const addTask = async () => {
     if (!newTaskTitle.trim() || !editingTemplate) return
     const maxPos = templateTasks.length > 0 ? Math.max(...templateTasks.map(t => t.position)) + 1 : 0
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('template_tasks')
       .insert({
         template_id: editingTemplate.id,
@@ -168,13 +132,11 @@ export default function TemplatesPage() {
       })
       .select()
       .single()
-    if (!error && data) {
-      setTemplateTasks([...templateTasks, data])
-    }
+    if (data) setTemplateTasks([...templateTasks, data])
     setNewTaskTitle('')
   }
 
-  const updateTaskTitle = async (taskId: string, newTitle: string) => {
+  const updateTask = async (taskId: string, newTitle: string) => {
     await supabase.from('template_tasks').update({ title: newTitle }).eq('id', taskId)
     setTemplateTasks(templateTasks.map(t => t.id === taskId ? { ...t, title: newTitle } : t))
     setEditingTaskId(null)
@@ -189,39 +151,33 @@ export default function TemplatesPage() {
     const index = templateTasks.findIndex(t => t.id === taskId)
     if (direction === 'up' && index === 0) return
     if (direction === 'down' && index === templateTasks.length - 1) return
-    const newList = [...templateTasks]
+    const newTasks = [...templateTasks]
     const swapIndex = direction === 'up' ? index - 1 : index + 1
-    const tempPos = newList[index].position
-    newList[index].position = newList[swapIndex].position
-    newList[swapIndex].position = tempPos
-    await Promise.all([
-      supabase.from('template_tasks').update({ position: newList[index].position }).eq('id', newList[index].id),
-      supabase.from('template_tasks').update({ position: newList[swapIndex].position }).eq('id', newList[swapIndex].id)
-    ])
-    setTemplateTasks(newList.sort((a, b) => a.position - b.position))
+    // swap positions
+    const tempPos = newTasks[index].position
+    newTasks[index].position = newTasks[swapIndex].position
+    newTasks[swapIndex].position = tempPos
+    await supabase.from('template_tasks').update({ position: newTasks[index].position }).eq('id', newTasks[index].id)
+    await supabase.from('template_tasks').update({ position: newTasks[swapIndex].position }).eq('id', newTasks[swapIndex].id)
+    setTemplateTasks(newTasks.sort((a, b) => a.position - b.position))
   }
 
-  const deleteTemplate = async (id: string) => {
-    if (!confirm('Vorlage wirklich löschen? Alle enthaltenen Aufgaben werden ebenfalls gelöscht.')) return
-    await supabase.from('templates').delete().eq('id', id)
-    await loadTemplates()
-    if (editingTemplate?.id === id) closeModal()
-  }
-
-  const createProjectFromTemplate = async (templateId: string, templateName: string) => {
+  const createProjectFromTemplate = async (template: Template) => {
     if (!userName) return
-    setCreatingProject(templateId)
+    setCreatingProject(template.id)
     try {
       // 1. Projekt erstellen
       const { data: newProject, error: projectError } = await supabase
         .from('projects')
         .insert({
-          name: `${templateName} (${new Date().toLocaleDateString()})`,
+          name: `${template.name}`,
+          commissioning_date: null,
           creator_name: userName,
           archived: false,
         })
         .select()
         .single()
+
       if (projectError || !newProject) throw new Error('Projekt konnte nicht erstellt werden')
 
       // 2. Teilnehmer hinzufügen
@@ -230,15 +186,16 @@ export default function TemplatesPage() {
         user_name: userName,
       })
 
-      // 3. Aufgaben aus Vorlage kopieren
-      const { data: templateTasks } = await supabase
+      // 3. Aufgaben der Vorlage laden
+      const { data: tasks } = await supabase
         .from('template_tasks')
         .select('title, description, position')
-        .eq('template_id', templateId)
+        .eq('template_id', template.id)
         .order('position')
-      if (templateTasks && templateTasks.length > 0) {
+
+      if (tasks && tasks.length > 0) {
         await supabase.from('tasks').insert(
-          templateTasks.map(t => ({
+          tasks.map(t => ({
             project_id: newProject.id,
             title: t.title,
             description: t.description,
@@ -248,7 +205,7 @@ export default function TemplatesPage() {
           }))
         )
       }
-      // Zur Projektseite navigieren
+
       router.push(`/project/${newProject.id}`)
     } catch (err) {
       console.error(err)
@@ -261,68 +218,52 @@ export default function TemplatesPage() {
   if (loading) return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>Laden...</div>
+      <div style={{ textAlign: 'center', padding: '80px' }}>Laden...</div>
     </div>
   )
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '800px', margin: '0 auto', padding: '24px 16px 80px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <BookTemplate size={22} style={{ color: 'var(--accent-light)' }} />
-            <h1 style={{ fontSize: '22px', fontWeight: 800 }}>Projektvorlagen</h1>
+      <main style={{ maxWidth: '800px', margin: '0 auto', padding: '20px 16px 80px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Projektvorlagen</h1>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Verwalte Vorlagen mit Aufgaben – beim Erstellen eines Projekts übernehmen</p>
           </div>
-          <button className="btn btn-primary" onClick={openCreate} style={{ padding: '6px 12px' }}>
-            <Plus size={14} /> Neue Vorlage
+          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ padding: '8px 16px' }}>
+            <Plus size={16} /> Neue Vorlage
           </button>
         </div>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '24px' }}>
-          Erstelle wiederverwendbare Aufgabenlisten. Beim Erstellen eines Projekts kannst du eine Vorlage auswählen.
-        </p>
 
         {templates.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: '48px 20px' }}>
-            <p style={{ color: 'var(--text-muted)' }}>Keine Vorlagen vorhanden</p>
-            <button className="btn btn-secondary" onClick={openCreate} style={{ marginTop: '12px' }}>Erste Vorlage erstellen</button>
+          <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <BookTemplate size={48} style={{ color: 'var(--text-muted)', marginBottom: '12px' }} />
+            <p style={{ color: 'var(--text-secondary)' }}>Noch keine Vorlagen vorhanden</p>
+            <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ marginTop: '12px' }}>Erste Vorlage erstellen</button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {templates.map(template => (
-              <div key={template.id} className="card" style={{ padding: '18px 20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+              <div key={template.id} className="card" style={{ padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                   <div>
-                    <h2 style={{ fontSize: '17px', fontWeight: 700 }}>{template.name}</h2>
-                    {template.description && <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>{template.description}</p>}
+                    <h3 style={{ fontSize: '18px', fontWeight: 700 }}>{template.name}</h3>
+                    {template.description && <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{template.description}</p>}
                   </div>
                   <div style={{ display: 'flex', gap: '6px' }}>
-                    <button className="btn btn-ghost" onClick={() => openEdit(template)} style={{ padding: '4px 8px' }} title="Bearbeiten">
-                      <Edit size={14} />
-                    </button>
-                    <button className="btn btn-ghost" onClick={() => deleteTemplate(template.id)} style={{ padding: '4px 8px', color: 'var(--danger)' }} title="Löschen">
-                      <Trash2 size={14} />
-                    </button>
+                    <button className="btn btn-ghost" onClick={() => openEdit(template)} style={{ padding: '4px 8px' }}><Edit size={14} /></button>
+                    <button className="btn btn-ghost" onClick={() => deleteTemplate(template.id)} style={{ padding: '4px 8px', color: 'var(--danger)' }}><Trash2 size={14} /></button>
                   </div>
-                </div>
-                <div style={{ marginBottom: '16px' }}>
-                  {/* Aufgabenliste (max 5) */}
-                  {templateTasks.length === 0 && (
-                    <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Keine Aufgaben in dieser Vorlage.</p>
-                  )}
-                  {/* Hier müssten wir die Aufgaben für dieses Template laden – vereinfacht: Zeige nur Anzahl */}
-                  {/* Wir laden nicht alle Tasks für jede Vorlage, daher nur Anzahl anzeigen */}
-                  <span style={{ fontSize: '13px', color: 'var(--accent-light)' }}>
-                    {template.id === editingTemplate?.id ? templateTasks.length : '...'} Aufgaben
-                  </span>
                 </div>
                 <button
                   className="btn btn-primary"
-                  onClick={() => createProjectFromTemplate(template.id, template.name)}
+                  onClick={() => createProjectFromTemplate(template)}
                   disabled={creatingProject === template.id}
-                  style={{ width: '100%', padding: '10px' }}
+                  style={{ marginTop: '12px', width: '100%' }}
                 >
-                  {creatingProject === template.id ? 'Wird erstellt...' : 'Neues Projekt mit dieser Vorlage'} <ChevronRight size={15} />
+                  {creatingProject === template.id ? 'Wird erstellt...' : 'Neues Projekt mit dieser Vorlage'}
+                  <ChevronRight size={16} style={{ marginLeft: '6px' }} />
                 </button>
               </div>
             ))}
@@ -331,12 +272,12 @@ export default function TemplatesPage() {
       </main>
 
       {/* Modal zum Erstellen/Bearbeiten einer Vorlage */}
-      {showCreateModal && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
+      {(showCreateModal || editingTemplate) && (
+        <div className="modal-overlay" onClick={closeEdit}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 600 }}>{editingTemplate ? 'Vorlage bearbeiten' : 'Neue Vorlage'}</h3>
-              <button onClick={closeModal} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={18} /></button>
+              <h3 style={{ fontSize: '18px', fontWeight: 700 }}>{editingTemplate ? 'Vorlage bearbeiten' : 'Neue Vorlage'}</h3>
+              <button onClick={closeEdit} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
             </div>
             <input
               className="input"
@@ -358,24 +299,24 @@ export default function TemplatesPage() {
               <div style={{ marginBottom: '16px' }}>
                 <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>Aufgaben</h4>
                 <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px', marginBottom: '8px' }}>
+                  {templateTasks.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center' }}>Keine Aufgaben</p>}
                   {templateTasks.map((task, idx) => (
-                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-                      <GripVertical size={14} style={{ color: 'var(--text-muted)', cursor: 'grab' }} />
+                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
                       {editingTaskId === task.id ? (
                         <input
                           autoFocus
                           defaultValue={task.title}
-                          onBlur={e => updateTaskTitle(task.id, e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && updateTaskTitle(task.id, (e.target as HTMLInputElement).value)}
-                          style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)' }}
+                          onBlur={e => updateTask(task.id, e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && updateTask(task.id, (e.target as HTMLInputElement).value)}
+                          style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-primary)' }}
                         />
                       ) : (
                         <span style={{ flex: 1 }}>{task.title}</span>
                       )}
-                      <button className="btn btn-ghost" onClick={() => setEditingTaskId(task.id)} style={{ padding: '2px 6px' }}><Edit size={12} /></button>
-                      <button className="btn btn-ghost" onClick={() => moveTask(task.id, 'up')} disabled={idx === 0} style={{ padding: '2px 6px' }}>↑</button>
-                      <button className="btn btn-ghost" onClick={() => moveTask(task.id, 'down')} disabled={idx === templateTasks.length - 1} style={{ padding: '2px 6px' }}>↓</button>
-                      <button className="btn btn-ghost" onClick={() => deleteTask(task.id)} style={{ padding: '2px 6px', color: 'var(--danger)' }}><Trash2 size={12} /></button>
+                      <button className="btn btn-ghost" onClick={() => setEditingTaskId(task.id)} style={{ padding: '2px 4px' }}><Edit size={12} /></button>
+                      <button className="btn btn-ghost" onClick={() => moveTask(task.id, 'up')} disabled={idx === 0} style={{ padding: '2px 4px' }}><ArrowUp size={12} /></button>
+                      <button className="btn btn-ghost" onClick={() => moveTask(task.id, 'down')} disabled={idx === templateTasks.length - 1} style={{ padding: '2px 4px' }}><ArrowDown size={12} /></button>
+                      <button className="btn btn-ghost" onClick={() => deleteTask(task.id)} style={{ padding: '2px 4px', color: 'var(--danger)' }}><Trash2 size={12} /></button>
                     </div>
                   ))}
                 </div>
@@ -393,10 +334,10 @@ export default function TemplatesPage() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
-              <button className="btn btn-ghost" onClick={closeModal}>Abbrechen</button>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button className="btn btn-ghost" onClick={closeEdit}>Abbrechen</button>
               <button className="btn btn-primary" onClick={saveTemplate} disabled={!templateName.trim() || saving}>
-                Speichern
+                {saving ? 'Speichern...' : 'Speichern'}
               </button>
             </div>
           </div>
@@ -422,10 +363,10 @@ export default function TemplatesPage() {
           border-radius: 16px;
           padding: 20px;
           width: 100%;
-          max-width: 550px;
+          max-width: 600px;
           box-shadow: 0 20px 35px rgba(0,0,0,0.2);
         }
-        @media (max-width: 480px) {
+        @media (max-width: 640px) {
           .modal {
             padding: 16px;
           }
