@@ -155,7 +155,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+      <div className="modal-box" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px' }}>
         <h3 style={{ marginBottom: '20px', color: 'var(--text-primary)' }}>Neue Aufgabe</h3>
 
         {/* Auswahl zwischen manuell und Favorit */}
@@ -248,8 +248,8 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
            <div
   style={{
     display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
     gap: '12px',
     marginTop: '20px'
   }}
@@ -259,8 +259,8 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
     className="btn btn-ghost"
     onClick={onClose}
     style={{
-      width: '180px',
-      height: '44px'
+      flex: '1 1 140px',
+      maxWidth: '180px'
     }}
   >
     Abbrechen
@@ -271,8 +271,8 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
     onClick={handleCreateFromFavorite}
     disabled={loading || favorites.length === 0 || !selectedFavoriteId}
     style={{
-      width: '180px',
-      height: '44px'
+      flex: '1 1 140px',
+      maxWidth: '180px'
     }}
   >
     {loading ? 'Wird erstellt…' : 'Übernehmen'}
@@ -414,7 +414,6 @@ export default function ProjectPage() {
           Laden ...
         </div>
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
     </div>
   )
 
@@ -604,26 +603,6 @@ export default function ProjectPage() {
         />
       )}
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); }}
-        .modal-overlay {
-          position: fixed;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background: rgba(0,0,0,0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-        }
-        .modal {
-          background: var(--bg-primary);
-          border-radius: 16px;
-          padding: 24px;
-          width: 90%;
-          max-width: 550px;
-          box-shadow: 0 20px 35px rgba(0,0,0,0.2);
-        }
-      `}</style>
     </div>
   )
 }
