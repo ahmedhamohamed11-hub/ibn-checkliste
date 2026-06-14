@@ -235,7 +235,7 @@ export default function DashboardPage() {
           <button
             className="btn btn-primary"
             onClick={() => setShowCreateModal(true)}
-            style={{ '10px 14px', fontSize: '14px', borderRadius: '10px', whiteSpace: 'nowrap' }}
+        style={{ padding: '10px 14px', fontSize: '14px', borderRadius: '10px', whiteSpace: 'nowrap' }}
           >
             <Plus size={16} /> Neu
           </button>
