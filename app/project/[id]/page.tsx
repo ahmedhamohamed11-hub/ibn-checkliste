@@ -374,7 +374,7 @@ export default function ProjectPage() {
 
       {showActivity && <ActivityModal projectId={id} onClose={() => setShowActivity(false)} />}
       {showEditProject && <EditProjectModal project={project} onClose={() => setShowEditProject(false)} onUpdated={loadProject} />}
-      {showAddTask && <AddTaskModal projectId={id} userName={userName!} taskCount={tasks.length} onClose={() => setShowAddTask(false)} onAdded={loadTasks} />}
+      {showAddTask && <AddTaskModal projectId={id} userName={userName!} onClose={() => setShowAddTask(false)} onAdded={loadTasks} />}
       {showParticipants && <ManageParticipantsModal projectId={id} currentUser={userName!} onClose={() => setShowParticipants(false)} />}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
