@@ -1,13 +1,18 @@
+// app/favorites/page.tsx
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { supabase } from '@/lib/supabase'
-import { DEFAULT_FAVORITES } from '@/lib/constants'
-import { Favorite } from '@/types'
 import Navbar from '@/components/ui/Navbar'
-import { Plus, Star, Trash2, Pencil, Check, X, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
+import { Star, Trash2, GripVertical } from 'lucide-react'
+
+interface Favorite {
+  id: string
+  title: string
+  position: number
+}
 
 export default function FavoritesPage() {
   const { userName } = useUser()
@@ -15,174 +20,126 @@ export default function FavoritesPage() {
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [loading, setLoading] = useState(true)
   const [newTitle, setNewTitle] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!userName) { router.push('/'); return }
+    if (!userName) {
+      router.push('/')
+      return
+    }
     loadFavorites()
   }, [userName])
 
   const loadFavorites = async () => {
+    if (!userName) return
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('favorites')
-      .select('*')
+      .select('id, title, position')
       .eq('user_name', userName)
-      .order('position')
-
-    if (data && data.length > 0) {
-      setFavorites(data)
+      .order('position', { ascending: true })
+    if (error) {
+      console.error('Fehler beim Laden der Favoriten:', error)
     } else {
-      // Seed default favorites for new user
-      const defaults = DEFAULT_FAVORITES.map((title, i) => ({
-        user_name: userName!, title, position: i,
-      }))
-      const { data: inserted } = await supabase.from('favorites').insert(defaults).select()
-      if (inserted) setFavorites(inserted)
+      setFavorites(data || [])
     }
     setLoading(false)
   }
 
-  const handleAdd = async () => {
-    const title = newTitle.trim()
-    if (!title) return
+  const addFavorite = async () => {
+    if (!newTitle.trim()) return
+    setSaving(true)
     const maxPos = favorites.length > 0 ? Math.max(...favorites.map(f => f.position)) + 1 : 0
-    const { data } = await supabase
-      .from('favorites')
-      .insert({ user_name: userName!, title, position: maxPos })
-      .select().single()
-    if (data) setFavorites(prev => [...prev, data])
-    setNewTitle('')
+    const { error } = await supabase.from('favorites').insert({
+      user_name: userName,
+      title: newTitle.trim(),
+      position: maxPos,
+    })
+    if (error) {
+      console.error('Fehler beim Hinzufügen:', error)
+    } else {
+      setNewTitle('')
+      loadFavorites()
+    }
+    setSaving(false)
   }
 
-  const handleDelete = async (id: string) => {
-    await supabase.from('favorites').delete().eq('id', id)
-    setFavorites(prev => prev.filter(f => f.id !== id))
+  const deleteFavorite = async (id: string) => {
+    const { error } = await supabase.from('favorites').delete().eq('id', id)
+    if (error) {
+      console.error('Fehler beim Löschen:', error)
+    } else {
+      loadFavorites()
+    }
   }
 
-  const handleRename = async (id: string) => {
-    if (!editValue.trim()) return
-    await supabase.from('favorites').update({ title: editValue.trim() }).eq('id', id)
-    setFavorites(prev => prev.map(f => f.id === id ? { ...f, title: editValue.trim() } : f))
-    setEditingId(null)
-  }
-
-  const handleMove = async (id: string, direction: 'up' | 'down') => {
-    const idx = favorites.findIndex(f => f.id === id)
-    if (direction === 'up' && idx === 0) return
-    if (direction === 'down' && idx === favorites.length - 1) return
-
-    const newFavs = [...favorites]
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
-    ;[newFavs[idx], newFavs[swapIdx]] = [newFavs[swapIdx], newFavs[idx]]
-
-    // Update positions
-    const updated = newFavs.map((f, i) => ({ ...f, position: i }))
-    setFavorites(updated)
-
-    // Persist
-    await Promise.all(updated.map(f =>
-      supabase.from('favorites').update({ position: f.position }).eq('id', f.id)
-    ))
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+        <Navbar />
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
+        </div>
+      </div>
+    )
   }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main className="main-content" style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-          <Star size={22} style={{ color: '#f59e0b' }} />
-          <h1 style={{ color: 'var(--text-primary)', fontSize: '22px', fontWeight: 800 }}>Favoriten</h1>
-          <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>({favorites.length})</span>
-        </div>
+      <main style={{ maxWidth: '800px', margin: '0 auto', padding: '20px 16px 80px 16px' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Star size={24} style={{ color: '#f59e0b' }} /> Meine Favoriten
+        </h1>
 
-        <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '20px' }}>
-          Diese Aufgaben werden beim Erstellen eines neuen Projekts automatisch vorgeschlagen.
-        </p>
-
-        {/* Add new */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-          <input
-            className="input"
-            value={newTitle}
-            onChange={e => setNewTitle(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            placeholder="Neuer Favorit ..."
-            style={{ flex: 1 }}
-          />
-          <button className="btn btn-primary" onClick={handleAdd} disabled={!newTitle.trim()} style={{ minHeight: 'auto', padding: '10px 16px' }}>
-            <Plus size={16} /> Hinzufügen
-          </button>
-        </div>
-
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>Laden ...</div>
+        {/* Liste der Favoriten */}
+        {favorites.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+            <Star size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+            <p>Keine Favoriten gespeichert.</p>
+            <p style={{ fontSize: '13px', marginTop: '8px' }}>Erstelle beim Anlegen einer Aufgabe einen Favoriten.</p>
+          </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {favorites.map((fav, idx) => (
-              <div
-                key={fav.id}
-                className="card"
-                style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}
-              >
-                {/* Position buttons */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flexShrink: 0 }}>
-                  <button
-                    onClick={() => handleMove(fav.id, 'up')}
-                    style={{ background: 'none', border: 'none', color: idx === 0 ? 'var(--text-muted)' : 'var(--text-secondary)', cursor: idx === 0 ? 'default' : 'pointer', minHeight: 'auto', padding: '2px', opacity: idx === 0 ? 0.3 : 1 }}
-                  >
-                    <ArrowUp size={12} />
-                  </button>
-                  <button
-                    onClick={() => handleMove(fav.id, 'down')}
-                    style={{ background: 'none', border: 'none', color: idx === favorites.length - 1 ? 'var(--text-muted)' : 'var(--text-secondary)', cursor: idx === favorites.length - 1 ? 'default' : 'pointer', minHeight: 'auto', padding: '2px', opacity: idx === favorites.length - 1 ? 0.3 : 1 }}
-                  >
-                    <ArrowDown size={12} />
-                  </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
+            {favorites.map((fav) => (
+              <div key={fav.id} className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                  <GripVertical size={16} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 500 }}>{fav.title}</span>
                 </div>
-
-                <span style={{ color: 'var(--text-muted)', fontSize: '12px', width: '24px', textAlign: 'right', flexShrink: 0 }}>{idx + 1}</span>
-
-                {editingId === fav.id ? (
-                  <input
-                    className="input"
-                    value={editValue}
-                    onChange={e => setEditValue(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleRename(fav.id); if (e.key === 'Escape') setEditingId(null) }}
-                    autoFocus
-                    style={{ flex: 1 }}
-                  />
-                ) : (
-                  <span style={{ flex: 1, color: 'var(--text-primary)', fontSize: '14px' }}>{fav.title}</span>
-                )}
-
-                <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                  {editingId === fav.id ? (
-                    <>
-                      <button onClick={() => handleRename(fav.id)} style={{ background: 'none', border: 'none', color: 'var(--success)', cursor: 'pointer', minHeight: 'auto', padding: '4px' }}>
-                        <Check size={15} />
-                      </button>
-                      <button onClick={() => setEditingId(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', minHeight: 'auto', padding: '4px' }}>
-                        <X size={15} />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => { setEditingId(fav.id); setEditValue(fav.title) }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', minHeight: 'auto', padding: '4px' }}>
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => handleDelete(fav.id)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', minHeight: 'auto', padding: '4px' }}>
-                        <Trash2 size={14} />
-                      </button>
-                    </>
-                  )}
-                </div>
+                <button
+                  onClick={() => deleteFavorite(fav.id)}
+                  className="btn btn-ghost"
+                  style={{ padding: '6px', minHeight: 'auto', color: 'var(--danger)' }}
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             ))}
           </div>
         )}
+
+        {/* Neuen Favoriten hinzufügen */}
+        <div className="card" style={{ padding: '16px' }}>
+          <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>Neuen Favoriten hinzufügen</label>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <input
+              className="input"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="z. B. Messprotokolle erstellen"
+              style={{ flex: 2 }}
+            />
+            <button className="btn btn-primary" onClick={addFavorite} disabled={saving || !newTitle.trim()}>
+              {saving ? 'Speichern…' : 'Speichern'}
+            </button>
+          </div>
+        </div>
       </main>
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); }}
+      `}</style>
     </div>
   )
 }
