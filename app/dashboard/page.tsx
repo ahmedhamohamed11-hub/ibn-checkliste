@@ -221,7 +221,7 @@ export default function DashboardPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
 
-      <main style={{ width: '100%', maxWidth: '100%', padding: '16px 16px 140px 16px' }}>
+      <main style={{ width: '100%', maxWidth: '100%', padding: '16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px' }}>
           <div>
@@ -551,13 +551,6 @@ export default function DashboardPage() {
         />
       )}
 
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @media (min-width: 768px) {
-          main { padding: 24px 24px 140px 24px !important; max-width: 800px !important; margin: 0 auto !important; }
-          .btn-label { display: inline !important; }
-        }
-      `}</style>
     </div>
   )
 }
