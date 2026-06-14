@@ -221,7 +221,7 @@ export default function DashboardPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
 
-      <main style={{ width: '100%', maxWidth: '100%', padding: '16px' }}>
+      <main style={{ width: '100%', maxWidth: '100%', '16px' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px' }}>
           <div>
@@ -235,7 +235,7 @@ export default function DashboardPage() {
           <button
             className="btn btn-primary"
             onClick={() => setShowCreateModal(true)}
-            style={{ padding: '10px 14px', fontSize: '14px', borderRadius: '10px', whiteSpace: 'nowrap' }}
+            style={{ '10px 14px', fontSize: '14px', borderRadius: '10px', whiteSpace: 'nowrap' }}
           >
             <Plus size={16} /> Neu
           </button>
@@ -270,7 +270,7 @@ export default function DashboardPage() {
             background: 'var(--bg-secondary)',
             borderRadius: '10px',
             border: '1px solid var(--border)',
-            padding: '3px',
+            '3px',
             gap: '3px',
             marginBottom: '16px',
           }}
@@ -279,7 +279,7 @@ export default function DashboardPage() {
             onClick={() => setShowArchived(false)}
             style={{
               flex: 1,
-              padding: '9px',
+              '9px',
               borderRadius: '7px',
               border: 'none',
               cursor: 'pointer',
@@ -297,7 +297,7 @@ export default function DashboardPage() {
             onClick={() => setShowArchived(true)}
             style={{
               flex: 1,
-              padding: '9px',
+              '9px',
               borderRadius: '7px',
               border: 'none',
               cursor: 'pointer',
@@ -315,7 +315,7 @@ export default function DashboardPage() {
 
         {/* Projects list */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+          <div style={{ textAlign: 'center', '60px 20px', color: 'var(--text-muted)' }}>
             <div
               style={{
                 width: '36px',
