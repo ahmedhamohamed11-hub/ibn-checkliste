@@ -111,6 +111,7 @@ export default function LoginPage() {
               onKeyDown={handleKey}
               autoFocus
               autoCapitalize="words"
+              autoComplete="off"   // ✅ verhindert Browser-Vorschläge
               style={{ fontSize: '16px' }}
             />
             {error && (
