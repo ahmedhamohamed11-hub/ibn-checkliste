@@ -39,7 +39,8 @@ export default function ProjectPage() {
 
   // ==================== FAVORITEN (localStorage) ====================
   const [favorites, setFavorites] = useState<string[]>([])
-  const [newFavorite, setNewFavorite] = useState('')
+  const [selectedFavorite, setSelectedFavorite] = useState<string>('')
+  const [newFavoriteName, setNewFavoriteName] = useState('')
 
   // Favoriten laden (pro Benutzer + Projekt)
   const loadFavorites = useCallback(() => {
@@ -48,14 +49,16 @@ export default function ProjectPage() {
     const stored = localStorage.getItem(key)
     if (stored) {
       try {
-        setFavorites(JSON.parse(stored))
+        const favs = JSON.parse(stored)
+        setFavorites(favs)
+        if (favs.length > 0 && !selectedFavorite) setSelectedFavorite(favs[0])
       } catch {
         setFavorites([])
       }
     } else {
       setFavorites([])
     }
-  }, [userName, id])
+  }, [userName, id, selectedFavorite])
 
   // Favoriten speichern
   const saveFavorites = (newFavs: string[]) => {
@@ -63,32 +66,40 @@ export default function ProjectPage() {
     const key = `favorites_${userName}_${id}`
     localStorage.setItem(key, JSON.stringify(newFavs))
     setFavorites(newFavs)
+    if (newFavs.length > 0 && !selectedFavorite) setSelectedFavorite(newFavs[0])
+    if (newFavs.length === 0) setSelectedFavorite('')
   }
 
   // Neuen Favoriten hinzufügen
   const addFavorite = () => {
-    const trimmed = newFavorite.trim()
+    const trimmed = newFavoriteName.trim()
     if (!trimmed) return
     if (favorites.includes(trimmed)) {
       alert('Dieser Favorit existiert bereits')
       return
     }
     saveFavorites([...favorites, trimmed])
-    setNewFavorite('')
+    setNewFavoriteName('')
+    setSelectedFavorite(trimmed)
   }
 
-  // Favorit entfernen
-  const removeFavorite = (fav: string) => {
-    saveFavorites(favorites.filter(f => f !== fav))
+  // Favorit löschen
+  const removeFavorite = () => {
+    if (!selectedFavorite) return
+    const newFavs = favorites.filter(f => f !== selectedFavorite)
+    saveFavorites(newFavs)
+    if (newFavs.length > 0) setSelectedFavorite(newFavs[0])
+    else setSelectedFavorite('')
   }
 
-  // Aus Favorit eine Aufgabe erstellen
-  const addTaskFromFavorite = async (title: string) => {
+  // Aufgabe aus ausgewähltem Favoriten erstellen
+  const addTaskFromSelectedFavorite = async () => {
+    if (!selectedFavorite) return
     if (!id || !userName) return
     const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position)) + 1 : 0
     const { error } = await supabase.from('tasks').insert({
       project_id: id,
-      title,
+      title: selectedFavorite,
       status: 'offen',
       created_by: userName,
       position: maxPos,
@@ -98,7 +109,7 @@ export default function ProjectPage() {
         project_id: id,
         actor: userName,
         action: 'Aufgabe aus Favorit hinzugefügt',
-        detail: title,
+        detail: selectedFavorite,
       })
       loadTasks()
     }
@@ -189,11 +200,15 @@ export default function ProjectPage() {
   const isParticipant = participants.some(p => p.user_name === userName)
   const isCreator = project?.creator_name === userName
 
-  const filteredTasks = tasks.filter(t => {
-    const matchFilter = filter === 'alle' || t.status === filter
-    const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
-    return matchFilter && matchSearch
-  })
+  // Sortierung: in_arbeit > offen > erledigt
+  const statusOrder = { in_arbeit: 0, offen: 1, erledigt: 2 }
+  const filteredAndSortedTasks = tasks
+    .filter(t => {
+      const matchFilter = filter === 'alle' || t.status === filter
+      const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
+      return matchFilter && matchSearch
+    })
+    .sort((a, b) => statusOrder[a.status] - statusOrder[b.status])
 
   const doneCount = tasks.filter(t => t.status === 'erledigt').length
   const inWorkCount = tasks.filter(t => t.status === 'in_arbeit').length
@@ -286,64 +301,45 @@ export default function ProjectPage() {
           </div>
         </div>
 
-        {/* ==================== FAVORITEN-BEREICH ==================== */}
+        {/* ==================== NEUER FAVORITEN-BEREICH ==================== */}
         <div className="card" style={{ padding: '16px', marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
             <Star size={18} style={{ color: '#f59e0b' }} />
-            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Meine Aufgaben-Favoriten</h3>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Aufgabe aus Favorit</h3>
           </div>
 
-          {/* Vorhandene Favoriten als Chips */}
-          {favorites.length > 0 ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
-              {favorites.map((fav, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '40px',
-                    padding: '4px 8px 4px 14px',
-                    fontSize: '13px',
-                  }}
-                >
-                  <span style={{ color: 'var(--text-primary)' }}>{fav}</span>
-                  <button
-                    onClick={() => addTaskFromFavorite(fav)}
-                    className="btn btn-primary"
-                    style={{ padding: '4px 8px', minHeight: 'auto', fontSize: '11px', background: 'var(--accent)', borderRadius: '30px' }}
-                    title="Als Aufgabe hinzufügen"
-                  >
-                    <Plus size={12} /> Aufgabe
-                  </button>
-                  <button
-                    onClick={() => removeFavorite(fav)}
-                    className="btn btn-ghost"
-                    style={{ padding: '4px', minHeight: 'auto', color: 'var(--text-muted)' }}
-                    title="Aus Favoriten entfernen"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-              Keine Favoriten gespeichert. Füge unten einen hinzu.
+          {favorites.length === 0 ? (
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+              Noch keine Favoriten gespeichert. Erstelle unten einen neuen Favoriten.
             </p>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
+              <select
+                className="input"
+                value={selectedFavorite}
+                onChange={(e) => setSelectedFavorite(e.target.value)}
+                style={{ flex: '2', minWidth: '160px' }}
+              >
+                {favorites.map((fav, idx) => (
+                  <option key={idx} value={fav}>{fav}</option>
+                ))}
+              </select>
+              <button className="btn btn-primary" onClick={addTaskFromSelectedFavorite} style={{ whiteSpace: 'nowrap' }}>
+                <Plus size={14} style={{ marginRight: '4px' }} /> Aufgabe aus Favorit
+              </button>
+              <button className="btn btn-ghost" onClick={removeFavorite} style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
+                <Trash2 size={14} style={{ marginRight: '4px' }} /> Löschen
+              </button>
+            </div>
           )}
 
-          {/* Neuen Favoriten hinzufügen */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
             <input
               className="input"
-              placeholder="Neuer Favorit (z. B. Dokumentation prüfen)"
-              value={newFavorite}
-              onChange={(e) => setNewFavorite(e.target.value)}
-              style={{ flex: 1, minWidth: '180px' }}
+              placeholder="Neuen Favoriten speichern (z. B. Dokumentation prüfen)"
+              value={newFavoriteName}
+              onChange={(e) => setNewFavoriteName(e.target.value)}
+              style={{ flex: 2, minWidth: '180px' }}
             />
             <button className="btn btn-secondary" onClick={addFavorite} style={{ whiteSpace: 'nowrap' }}>
               <Star size={14} style={{ marginRight: '4px' }} /> Als Favorit speichern
@@ -415,8 +411,8 @@ export default function ProjectPage() {
           </div>
         )}
 
-        {/* Aufgabenliste */}
-        {filteredTasks.length === 0 ? (
+        {/* Aufgabenliste mit Sortierung */}
+        {filteredAndSortedTasks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-muted)' }}>
             <p style={{ fontSize: '15px', marginBottom: '8px' }}>
               {search ? 'Keine Aufgaben gefunden' : filter !== 'alle' ? `Keine ${filter === 'offen' ? 'offenen' : filter === 'in_arbeit' ? 'laufenden' : 'erledigten'} Aufgaben` : 'Noch keine Aufgaben'}
@@ -429,7 +425,7 @@ export default function ProjectPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '20px' }}>
-            {filteredTasks.map(task => (
+            {filteredAndSortedTasks.map(task => (
               <TaskCard
                 key={task.id}
                 task={task}
