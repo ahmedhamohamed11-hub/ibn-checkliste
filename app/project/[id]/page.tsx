@@ -24,7 +24,6 @@ interface AddTaskModalProps {
   nextPosition: number
   onClose: () => void
   onCreated: () => void
-  // Favoriten-Funktionen und -Daten werden von der Parent-Komponente übergeben
   favorites: string[]
   addFavorite: (name: string) => void
   removeFavorite: (name: string) => void
@@ -102,7 +101,7 @@ function AddTaskModal({
     setLoading(false)
   }
 
-  // Neuen Favoriten hinzufügen (wird in der Liste gespeichert)
+  // Neuen Favoriten hinzufügen
   const handleAddFavorite = () => {
     const trimmed = newFavoriteName.trim()
     if (!trimmed) return
@@ -354,7 +353,8 @@ export default function ProjectPage() {
     const actionMap = { offen: 'auf Offen gesetzt', in_arbeit: 'in Bearbeitung', erledigt: 'erledigt' }
     await supabase.from('activity_log').insert({
       project_id: id, task_id: task.id, actor: userName,
-      action: `Aufgabe ${actionMap[newStatus]}`, detail: task.title,
+      action: `Aufgabe ${actionMap[newStatus]}`,
+      detail: task.title,
     })
     loadTasks()
   }
@@ -371,7 +371,8 @@ export default function ProjectPage() {
     )
     await supabase.from('activity_log').insert({
       project_id: id, actor: userName,
-      action: `${lines.length} Aufgaben importiert`, detail: lines.join(', '),
+      action: `${lines.length} Aufgaben importiert`,
+      detail: lines.join(', '),
     })
     setListInput('')
     setShowListImport(false)
