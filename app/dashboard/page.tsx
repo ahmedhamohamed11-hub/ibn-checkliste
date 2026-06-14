@@ -54,10 +54,16 @@ export default function DashboardPage() {
     setLoading(true)
 
     try {
-      const { data: participantData } = await supabase
+      const { data: participantData, error: participantError } = await supabase
         .from('project_participants')
         .select('project_id')
         .eq('user_name', userName)
+
+      if (participantError) {
+        console.error('Fehler beim Laden der Teilnehmer:', participantError)
+        setProjects([])
+        return
+      }
 
       const projectIds = participantData?.map(p => p.project_id) || []
 
@@ -66,21 +72,30 @@ export default function DashboardPage() {
         return
       }
 
-      const { data: projectsData } = await supabase
+      const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select('*')
         .in('id', projectIds)
         .order('created_at', { ascending: false })
+
+      if (projectsError) {
+        console.error('Fehler beim Laden der Projekte:', projectsError)
+        setProjects([])
+        return
+      }
 
       if (!projectsData) {
         setProjects([])
         return
       }
 
-      const [{ data: allParticipants }, { data: allTasks }] = await Promise.all([
+      const [{ data: allParticipants, error: participantsError }, { data: allTasks, error: tasksError }] = await Promise.all([
         supabase.from('project_participants').select('*').in('project_id', projectIds),
         supabase.from('tasks').select('id, project_id, status').in('project_id', projectIds),
       ])
+
+      if (participantsError) console.error('Fehler beim Laden aller Teilnehmer:', participantsError)
+      if (tasksError) console.error('Fehler beim Laden aller Aufgaben:', tasksError)
 
       const enriched: ProjectWithStats[] = projectsData.map(p => ({
         ...p,
@@ -90,65 +105,84 @@ export default function DashboardPage() {
       }))
 
       setProjects(enriched)
+    } catch (err) {
+      console.error('Unerwarteter Fehler in loadProjects:', err)
+      setProjects([])
     } finally {
       setLoading(false)
     }
   }
 
   const handleArchive = async (id: string, archived: boolean) => {
-    await supabase.from('projects').update({ archived: !archived }).eq('id', id)
-    loadProjects()
+    const { error } = await supabase.from('projects').update({ archived: !archived }).eq('id', id)
+    if (error) console.error('Fehler beim Archivieren/Wiederherstellen:', error)
+    else loadProjects()
   }
 
   const handleDuplicate = async (project: ProjectWithStats) => {
-    const { data: newProject } = await supabase
-      .from('projects')
-      .insert({
-        name: `${project.name} (Kopie)`,
-        commissioning_date: project.commissioning_date,
-        creator_name: userName,
-        archived: false,
-      })
-      .select()
-      .single()
+    try {
+      const { data: newProject, error: createError } = await supabase
+        .from('projects')
+        .insert({
+          name: `${project.name} (Kopie)`,
+          commissioning_date: project.commissioning_date,
+          creator_name: userName,
+          archived: false,
+        })
+        .select()
+        .single()
 
-    if (!newProject) return
+      if (createError) {
+        console.error('Fehler beim Duplizieren (Projekt):', createError)
+        return
+      }
 
-    const { data: origParticipants } = await supabase
-      .from('project_participants')
-      .select('user_name')
-      .eq('project_id', project.id)
+      if (!newProject) return
 
-    if (origParticipants && origParticipants.length > 0) {
-      await supabase.from('project_participants').insert(
-        origParticipants.map(p => ({
-          project_id: newProject.id,
-          user_name: p.user_name,
-        }))
-      )
+      const { data: origParticipants, error: participantsError } = await supabase
+        .from('project_participants')
+        .select('user_name')
+        .eq('project_id', project.id)
+
+      if (participantsError) console.error('Fehler beim Laden der Teilnehmer für Duplikat:', participantsError)
+
+      if (origParticipants && origParticipants.length > 0) {
+        const { error: insertError } = await supabase.from('project_participants').insert(
+          origParticipants.map(p => ({
+            project_id: newProject.id,
+            user_name: p.user_name,
+          }))
+        )
+        if (insertError) console.error('Fehler beim Einfügen der Teilnehmer für Duplikat:', insertError)
+      }
+
+      const { data: origTasks, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('project_id', project.id)
+        .order('position')
+
+      if (tasksError) console.error('Fehler beim Laden der Aufgaben für Duplikat:', tasksError)
+
+      if (origTasks && origTasks.length > 0) {
+        const { error: insertTasksError } = await supabase.from('tasks').insert(
+          origTasks.map(t => ({
+            project_id: newProject.id,
+            title: t.title,
+            description: t.description,
+            status: 'offen',
+            created_by: userName,
+            position: t.position,
+          }))
+        )
+        if (insertTasksError) console.error('Fehler beim Einfügen der Aufgaben für Duplikat:', insertTasksError)
+      }
+
+      loadProjects()
+      router.push(`/project/${newProject.id}`)
+    } catch (err) {
+      console.error('Unerwarteter Fehler beim Duplizieren:', err)
     }
-
-    const { data: origTasks } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('project_id', project.id)
-      .order('position')
-
-    if (origTasks && origTasks.length > 0) {
-      await supabase.from('tasks').insert(
-        origTasks.map(t => ({
-          project_id: newProject.id,
-          title: t.title,
-          description: t.description,
-          status: 'offen',
-          created_by: userName,
-          position: t.position,
-        }))
-      )
-    }
-
-    loadProjects()
-    router.push(`/project/${newProject.id}`)
   }
 
   const handleDelete = async () => {
@@ -156,15 +190,22 @@ export default function DashboardPage() {
     const project = projects.find(p => p.id === deleteTarget)
     if (!project || deleteConfirmName !== project.name) return
 
-    await supabase.from('activity_log').delete().eq('project_id', deleteTarget)
-    await supabase.from('comments').delete().eq('project_id', deleteTarget)
-    await supabase.from('tasks').delete().eq('project_id', deleteTarget)
-    await supabase.from('project_participants').delete().eq('project_id', deleteTarget)
-    await supabase.from('projects').delete().eq('id', deleteTarget)
+    try {
+      // Löschen in der richtigen Reihenfolge (abhängige Tabellen zuerst)
+      await supabase.from('activity_log').delete().eq('project_id', deleteTarget)
+      await supabase.from('comments').delete().eq('project_id', deleteTarget)
+      await supabase.from('tasks').delete().eq('project_id', deleteTarget)
+      await supabase.from('project_participants').delete().eq('project_id', deleteTarget)
+      const { error } = await supabase.from('projects').delete().eq('id', deleteTarget)
 
-    setDeleteTarget(null)
-    setDeleteConfirmName('')
-    loadProjects()
+      if (error) console.error('Fehler beim Löschen des Projekts:', error)
+    } catch (err) {
+      console.error('Unerwarteter Fehler beim Löschen:', err)
+    } finally {
+      setDeleteTarget(null)
+      setDeleteConfirmName('')
+      loadProjects()
+    }
   }
 
   const filtered = projects.filter(p => {
