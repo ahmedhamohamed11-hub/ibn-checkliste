@@ -209,15 +209,20 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
               <span style={{ fontSize: '14px' }}>☐ Als Favorit speichern</span>
             </label>
 
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-ghost" onClick={onClose}>Abbrechen</button>
-              <button type="submit" className="btn btn-primary" disabled={loading || !title.trim()}>
-                {loading ? 'Wird erstellt…' : 'Aufgabe erstellen'}
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <button type="button" className="btn btn-ghost" onClick={onClose}
+                style={{ padding: '7px 14px', fontSize: '13px', minHeight: 'auto' }}>
+                Abbrechen
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleCreateFromFavorite}
+                disabled={loading || favorites.length === 0 || !selectedFavoriteId}
+                style={{ padding: '7px 16px', fontSize: '13px', minHeight: 'auto' }}
+              >
+                {loading ? '…' : 'Übernehmen'}
               </button>
             </div>
-          </form>
-        ) : (
-          <div>
             {loadingFavorites ? (
               <p style={{ color: 'var(--text-muted)' }}>Favoriten werden geladen…</p>
             ) : favorites.length === 0 ? (
