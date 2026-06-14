@@ -231,3 +231,7 @@ button, a, [role="button"] {
   .hide-mobile { display: inline; }
   .btn-label { display: inline !important; }
 }
+/* Hauptcontainer für Seiteninhalt – Abstand zur fixierten Bottom-Nav */
+.main-content {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
