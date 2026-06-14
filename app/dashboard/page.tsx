@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { supabase } from '@/lib/supabase'
@@ -19,7 +19,6 @@ interface ProjectWithStats extends Project {
 export default function DashboardPage() {
   const { userName } = useUser()
   const router = useRouter()
-
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -28,20 +27,37 @@ export default function DashboardPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
 
-  const loadProjects = useCallback(async () => {
-    if (!userName) return
+  useEffect(() => {
+    if (!userName) {
+      router.push('/')
+      return
+    }
+    loadProjects()
+  }, [userName])
 
+  useEffect(() => {
+    if (!userName) return
+    const channel = supabase
+      .channel('dashboard-projects')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => loadProjects())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_participants' }, () => loadProjects())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadProjects())
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [userName])
+
+  const loadProjects = async () => {
+    if (!userName) return
     setLoading(true)
+
     try {
-      const { data: participantData, error: participantError } = await supabase
+      const { data: participantData } = await supabase
         .from('project_participants')
         .select('project_id')
         .eq('user_name', userName)
-
-      if (participantError) {
-        setProjects([])
-        return
-      }
 
       const projectIds = participantData?.map(p => p.project_id) || []
 
@@ -50,13 +66,13 @@ export default function DashboardPage() {
         return
       }
 
-      const { data: projectsData, error: projectsError } = await supabase
+      const { data: projectsData } = await supabase
         .from('projects')
         .select('*')
         .in('id', projectIds)
         .order('created_at', { ascending: false })
 
-      if (projectsError || !projectsData) {
+      if (!projectsData) {
         setProjects([])
         return
       }
@@ -77,30 +93,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [userName])
-
-  useEffect(() => {
-    if (!userName) {
-      router.push('/')
-      return
-    }
-    loadProjects()
-  }, [userName, router, loadProjects])
-
-  useEffect(() => {
-    if (!userName) return
-
-    const channel = supabase
-      .channel('dashboard-projects')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => loadProjects())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'project_participants' }, () => loadProjects())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadProjects())
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [userName, loadProjects])
+  }
 
   const handleArchive = async (id: string, archived: boolean) => {
     await supabase.from('projects').update({ archived: !archived }).eq('id', id)
@@ -108,7 +101,7 @@ export default function DashboardPage() {
   }
 
   const handleDuplicate = async (project: ProjectWithStats) => {
-    const { data: newProject, error: newProjectError } = await supabase
+    const { data: newProject } = await supabase
       .from('projects')
       .insert({
         name: `${project.name} (Kopie)`,
@@ -119,7 +112,7 @@ export default function DashboardPage() {
       .select()
       .single()
 
-    if (newProjectError || !newProject) return
+    if (!newProject) return
 
     const { data: origParticipants } = await supabase
       .from('project_participants')
@@ -187,14 +180,8 @@ export default function DashboardPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
 
-      <main
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          padding: '16px',
-          paddingBottom: '140px',
-        }}
-      >
+      <main style={{ width: '100%', maxWidth: '100%', padding: '16px 16px 140px 16px' }}>
+        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px' }}>
           <div>
             <h1 style={{ color: 'var(--text-primary)', fontSize: 'clamp(18px, 5vw, 24px)', fontWeight: 800 }}>
@@ -204,7 +191,6 @@ export default function DashboardPage() {
               {activeCount} aktive{activeCount !== 1 ? 's' : ''} Projekt{activeCount !== 1 ? 'e' : ''}
             </p>
           </div>
-
           <button
             className="btn btn-primary"
             onClick={() => setShowCreateModal(true)}
@@ -214,6 +200,7 @@ export default function DashboardPage() {
           </button>
         </div>
 
+        {/* Search */}
         <div style={{ position: 'relative', marginBottom: '12px' }}>
           <Search
             size={15}
@@ -235,6 +222,7 @@ export default function DashboardPage() {
           />
         </div>
 
+        {/* Tabs */}
         <div
           style={{
             display: 'flex',
@@ -264,7 +252,6 @@ export default function DashboardPage() {
           >
             Aktiv ({activeCount})
           </button>
-
           <button
             onClick={() => setShowArchived(true)}
             style={{
@@ -285,6 +272,7 @@ export default function DashboardPage() {
           </button>
         </div>
 
+        {/* Projects list */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
             <div
@@ -306,7 +294,6 @@ export default function DashboardPage() {
             <p style={{ color: 'var(--text-secondary)', fontSize: '15px', fontWeight: 600 }}>
               {search ? 'Keine Projekte gefunden' : showArchived ? 'Kein Archiv vorhanden' : 'Noch keine Projekte'}
             </p>
-
             {!showArchived && !search && (
               <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ marginTop: '16px' }}>
                 <Plus size={16} /> Erstes Projekt erstellen
@@ -314,14 +301,7 @@ export default function DashboardPage() {
             )}
           </div>
         ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              paddingBottom: '140px',
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {filtered.map(project => (
               <div
                 key={project.id}
@@ -329,11 +309,11 @@ export default function DashboardPage() {
                 style={{ padding: '16px', cursor: 'pointer', width: '100%' }}
                 onClick={() => router.push(`/project/${project.id}`)}
               >
+                {/* Top row */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', gap: '10px' }}>
                   <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '15px', flex: 1, paddingRight: '8px', lineHeight: 1.3 }}>
                     {project.name}
                   </h3>
-
                   {project.archived && (
                     <span
                       style={{
@@ -352,6 +332,7 @@ export default function DashboardPage() {
                   )}
                 </div>
 
+                {/* Meta */}
                 <div style={{ display: 'flex', gap: '12px', marginBottom: '10px', flexWrap: 'wrap' }}>
                   {project.commissioning_date && (
                     <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
@@ -363,12 +344,14 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
+                {/* Progress */}
                 {project.task_count > 0 && (
                   <div style={{ marginBottom: '10px' }}>
                     <ProgressBar done={project.done_count} total={project.task_count} />
                   </div>
                 )}
 
+                {/* Bottom row */}
                 <div
                   style={{
                     display: 'flex',
@@ -379,6 +362,7 @@ export default function DashboardPage() {
                   }}
                   onClick={e => e.stopPropagation()}
                 >
+                  {/* Participants */}
                   <div style={{ display: 'flex', gap: '3px' }}>
                     {project.participants.slice(0, 4).map(p => (
                       <span
@@ -400,7 +384,6 @@ export default function DashboardPage() {
                         {p.user_name.charAt(0).toUpperCase()}
                       </span>
                     ))}
-
                     {project.participants.length > 4 && (
                       <span
                         style={{
@@ -421,6 +404,7 @@ export default function DashboardPage() {
                     )}
                   </div>
 
+                  {/* Action buttons */}
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button
                       className="btn btn-ghost"
@@ -432,7 +416,6 @@ export default function DashboardPage() {
                         {project.archived ? 'Wiederherstellen' : 'Archivieren'}
                       </span>
                     </button>
-
                     <button
                       className="btn btn-ghost"
                       onClick={() => handleDuplicate(project)}
@@ -441,7 +424,6 @@ export default function DashboardPage() {
                     >
                       <Copy size={13} />
                     </button>
-
                     {project.creator_name === userName && (
                       <button
                         className="btn"
@@ -469,6 +451,7 @@ export default function DashboardPage() {
         )}
       </main>
 
+      {/* Delete modal */}
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal-box" onClick={e => e.stopPropagation()} style={{ margin: '0 12px' }}>
@@ -483,19 +466,15 @@ export default function DashboardPage() {
                 <X size={20} />
               </button>
             </div>
-
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '14px' }}>
               Dieser Vorgang kann <strong>nicht rückgängig</strong> gemacht werden.
             </p>
-
             <p style={{ color: 'var(--text-primary)', fontSize: '14px', marginBottom: '6px' }}>
               Tippe den Projektnamen:
             </p>
-
             <p style={{ color: 'var(--accent-light)', fontWeight: 700, fontSize: '14px', marginBottom: '10px', wordBreak: 'break-word' }}>
               „{projects.find(p => p.id === deleteTarget)?.name}"
             </p>
-
             <input
               className="input"
               value={deleteConfirmName}
@@ -503,7 +482,6 @@ export default function DashboardPage() {
               placeholder="Projektnamen eingeben ..."
               style={{ marginBottom: '14px', fontSize: '15px' }}
             />
-
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)} style={{ flex: 1 }}>
                 Abbrechen
@@ -512,10 +490,7 @@ export default function DashboardPage() {
                 className="btn btn-danger"
                 onClick={handleDelete}
                 disabled={deleteConfirmName !== projects.find(p => p.id === deleteTarget)?.name}
-                style={{
-                  flex: 1,
-                  opacity: deleteConfirmName !== projects.find(p => p.id === deleteTarget)?.name ? 0.4 : 1,
-                }}
+                style={{ flex: 1, opacity: deleteConfirmName !== projects.find(p => p.id === deleteTarget)?.name ? 0.4 : 1 }}
               >
                 Löschen
               </button>
@@ -538,7 +513,7 @@ export default function DashboardPage() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         @media (min-width: 768px) {
-          main { padding: 24px 24px !important; max-width: 800px !important; margin: 0 auto !important; }
+          main { padding: 24px 24px 140px 24px !important; max-width: 800px !important; margin: 0 auto !important; }
           .btn-label { display: inline !important; }
         }
       `}</style>
