@@ -168,11 +168,11 @@ export default function DashboardPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
 
-      <main
+  <div
   style={{
-    width: '100%',
-    maxWidth: '100%',
-    padding: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
     paddingBottom: '140px'
   }}
 >
@@ -267,8 +267,14 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        ) : (<div
+  style={{
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    paddingBottom: '140px'
+  }}
+>
             {filtered.map(project => (
               <div
                 key={project.id}
