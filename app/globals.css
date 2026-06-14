@@ -218,7 +218,7 @@ button, a, [role="button"] {
   padding-bottom: env(safe-area-inset-bottom);
 }
 .bottom-nav-spacer {
-  height: calc(60px + env(safe-area-inset-bottom));
+  height: calc(52px + env(safe-area-inset-bottom));
 }
 .hide-mobile {
   display: none;
