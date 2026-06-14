@@ -137,33 +137,44 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
           })}
         </div>
 
-        {/* Title */}
-        <div
+       {/* Title */}
+<div
   style={{
     flex: 1,
     minWidth: 0,
     overflow: 'hidden',
   }}
 >
-          <p
-  style={{
-    color: 'var(--text-primary)',
-    fontSize: '14px',
-    fontWeight: 600,
-    textDecoration:
-      task.status === 'erledigt'
-        ? 'line-through'
-        : 'none',
-    whiteSpace: 'normal',
-    wordBreak: 'break-word',
-    overflowWrap: 'anywhere',
-    lineHeight: '1.4',
-  }}
->
-  {task.title}
-</p>
-          )}
-        </div>
+  <p
+    style={{
+      color: 'var(--text-primary)',
+      fontSize: '14px',
+      fontWeight: 600,
+      textDecoration:
+        task.status === 'erledigt'
+          ? 'line-through'
+          : 'none',
+      whiteSpace: 'normal',
+      wordBreak: 'break-word',
+      overflowWrap: 'anywhere',
+      lineHeight: '1.4',
+    }}
+  >
+    {task.title}
+  </p>
+
+  {task.completed_by && task.status === 'erledigt' && (
+    <p
+      style={{
+        color: 'var(--text-muted)',
+        fontSize: '11px',
+        marginTop: '4px',
+      }}
+    >
+      ✓ {task.completed_by}
+    </p>
+  )}
+</div>
 
         {/* Expand + actions */}
         <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
