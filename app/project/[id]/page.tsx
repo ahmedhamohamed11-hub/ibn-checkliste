@@ -17,7 +17,7 @@ import {
 
 type FilterStatus = 'alle' | TaskStatus
 
-// ==================== ADD TASK MODAL (kompakte Größe) ====================
+// ==================== ADD TASK MODAL (Mehrfachauswahl bei Favoriten) ====================
 interface AddTaskModalProps {
   projectId: string
   userName: string
@@ -32,7 +32,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
   const [description, setDescription] = useState('')
   const [saveAsFavorite, setSaveAsFavorite] = useState(false)
   const [favorites, setFavorites] = useState<{ id: string; title: string }[]>([])
-  const [selectedFavoriteId, setSelectedFavoriteId] = useState<string>('')
+  const [selectedFavoriteIds, setSelectedFavoriteIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
   const [loadingFavorites, setLoadingFavorites] = useState(true)
 
@@ -46,17 +46,19 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
       .order('position', { ascending: true })
     if (!error && data) {
       setFavorites(data)
-      if (data.length > 0 && !selectedFavoriteId) setSelectedFavoriteId(data[0].id)
+      // Standardmäßig nichts auswählen
+      setSelectedFavoriteIds(new Set())
     } else {
       setFavorites([])
     }
     setLoadingFavorites(false)
-  }, [userName, selectedFavoriteId])
+  }, [userName])
 
   useEffect(() => {
     loadFavorites()
   }, [loadFavorites])
 
+  // Manuelle Aufgabe erstellen
   const handleCreateManual = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
@@ -113,43 +115,56 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
     setLoading(false)
   }
 
-  const handleCreateFromFavorite = async () => {
-    if (!selectedFavoriteId) return
-    const selected = favorites.find(f => f.id === selectedFavoriteId)
-    if (!selected) return
+  // Alle ausgewählten Favoriten auf einmal erstellen
+  const handleCreateSelectedFavorites = async () => {
+    if (selectedFavoriteIds.size === 0) return
+    const selectedFavorites = favorites.filter(f => selectedFavoriteIds.has(f.id))
+    if (selectedFavorites.length === 0) return
 
     setLoading(true)
-    const { error } = await supabase.from('tasks').insert({
+    const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position)) + 1 : 0
+    const newTasks = selectedFavorites.map((fav, idx) => ({
       project_id: projectId,
-      title: selected.title,
+      title: fav.title,
       description: null,
       status: 'offen',
       created_by: userName,
-      position: nextPosition,
-    })
+      position: maxPos + idx,
+    }))
 
-    if (error) {
-      console.error('Fehler beim Erstellen aus Favorit:', error)
+    const { error: insertError } = await supabase.from('tasks').insert(newTasks)
+    if (insertError) {
+      console.error('Fehler beim Erstellen der Aufgaben:', insertError)
       setLoading(false)
       return
     }
 
-    await supabase.from('activity_log').insert({
-      project_id: projectId,
-      actor: userName,
-      action: 'Aufgabe aus Favorit hinzugefügt',
-      detail: selected.title,
-    })
+    // Aktivitäten loggen (eine pro Aufgabe oder eine Sammelmeldung)
+    for (const fav of selectedFavorites) {
+      await supabase.from('activity_log').insert({
+        project_id: projectId,
+        actor: userName,
+        action: 'Aufgabe aus Favorit hinzugefügt',
+        detail: fav.title,
+      })
+    }
 
     onCreated()
     onClose()
     setLoading(false)
   }
 
+  const toggleFavorite = (id: string) => {
+    const newSet = new Set(selectedFavoriteIds)
+    if (newSet.has(id)) newSet.delete(id)
+    else newSet.add(id)
+    setSelectedFavoriteIds(newSet)
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-        <h3 style={{ marginBottom: '16px', fontSize: '18px' }}>Neue Aufgabe</h3>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginBottom: '16px', fontSize: '18px', fontWeight: 600 }}>Neue Aufgabe</h3>
 
         <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
@@ -170,7 +185,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Titel *"
               autoFocus
-              style={{ marginBottom: '12px', fontSize: '14px', padding: '8px 10px' }}
+              style={{ marginBottom: '12px', fontSize: '14px', padding: '8px 10px', width: '100%' }}
             />
             <textarea
               className="input"
@@ -178,15 +193,15 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Beschreibung (optional)"
               rows={2}
-              style={{ marginBottom: '12px', fontSize: '13px', resize: 'vertical', padding: '8px 10px' }}
+              style={{ marginBottom: '12px', fontSize: '13px', resize: 'vertical', padding: '8px 10px', width: '100%' }}
             />
             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', fontSize: '13px' }}>
               <input type="checkbox" checked={saveAsFavorite} onChange={(e) => setSaveAsFavorite(e.target.checked)} />
               <span>Als Favorit speichern</span>
             </label>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: '6px 12px', fontSize: '13px' }}>Abbrechen</button>
-              <button type="submit" className="btn btn-primary" disabled={loading || !title.trim()} style={{ padding: '6px 12px', fontSize: '13px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: '6px 12px', fontSize: '13px', minWidth: '70px' }}>Abbrechen</button>
+              <button type="submit" className="btn btn-primary" disabled={loading || !title.trim()} style={{ padding: '6px 12px', fontSize: '13px', minWidth: '80px' }}>
                 {loading ? '…' : 'Erstellen'}
               </button>
             </div>
@@ -199,20 +214,27 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
               <p style={{ fontSize: '13px', marginBottom: '16px' }}>Keine Favoriten vorhanden.</p>
             ) : (
               <>
-                <select
-                  className="input"
-                  value={selectedFavoriteId}
-                  onChange={(e) => setSelectedFavoriteId(e.target.value)}
-                  style={{ width: '100%', fontSize: '14px', padding: '8px 10px', marginBottom: '16px' }}
-                >
+                <div style={{ marginBottom: '16px', maxHeight: '250px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px' }}>
                   {favorites.map((fav) => (
-                    <option key={fav.id} value={fav.id}>{fav.title}</option>
+                    <label key={fav.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 4px', cursor: 'pointer', fontSize: '14px' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedFavoriteIds.has(fav.id)}
+                        onChange={() => toggleFavorite(fav.id)}
+                      />
+                      <span>{fav.title}</span>
+                    </label>
                   ))}
-                </select>
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                  <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: '6px 12px', fontSize: '13px' }}>Abbrechen</button>
-                  <button className="btn btn-primary" onClick={handleCreateFromFavorite} disabled={loading} style={{ padding: '6px 12px', fontSize: '13px' }}>
-                    {loading ? '…' : 'Übernehmen'}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: '6px 12px', fontSize: '13px', minWidth: '70px' }}>Abbrechen</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleCreateSelectedFavorites}
+                    disabled={loading || selectedFavoriteIds.size === 0}
+                    style={{ padding: '6px 12px', fontSize: '13px', minWidth: '100px' }}
+                  >
+                    {loading ? '…' : `${selectedFavoriteIds.size} übernehmen`}
                   </button>
                 </div>
               </>
@@ -321,12 +343,11 @@ export default function ProjectPage() {
     loadTasks()
   }
 
-  // NEU: Alle Favoriten des Benutzers auf einmal importieren
+  // Alle Favoriten auf einmal importieren (zusätzlicher Button auf der Hauptseite)
   const handleImportAllFavorites = async () => {
     if (!userName) return
     setImportingFavorites(true)
     try {
-      // Alle Favoriten des Benutzers laden
       const { data: favorites, error } = await supabase
         .from('favorites')
         .select('title')
@@ -424,7 +445,7 @@ export default function ProjectPage() {
                 <span style={{ fontSize: '13px' }}>👤 {project.creator_name}</span>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button className="btn btn-ghost" onClick={() => setShowActivity(true)} style={{ padding: '6px 10px', fontSize: '12px' }}><History size={14} /> Verlauf</button>
               <button className="btn btn-ghost" onClick={() => setShowParticipants(true)} style={{ padding: '6px 10px', fontSize: '12px' }}><Users size={14} /> Teilnehmer</button>
               {isCreator && <button className="btn btn-ghost" onClick={() => setShowEditProject(true)} style={{ padding: '6px 10px' }}><Settings size={14} /></button>}
@@ -444,7 +465,7 @@ export default function ProjectPage() {
 
         {/* Filter & Buttons */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <div style={{ display: 'flex', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '2px' }}>
+          <div style={{ display: 'flex', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '8px', padding: '2px', flexWrap: 'wrap' }}>
             {statusFilters.map(f => (
               <button key={f.value} onClick={() => setFilter(f.value)} style={{
                 padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
@@ -463,8 +484,8 @@ export default function ProjectPage() {
 
         {showListImport && (
           <div className="card" style={{ padding: '12px', marginBottom: '16px' }}>
-            <textarea className="input" value={listInput} onChange={e => setListInput(e.target.value)} placeholder="Eine Aufgabe pro Zeile" rows={3} style={{ marginBottom: '8px' }} />
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <textarea className="input" value={listInput} onChange={e => setListInput(e.target.value)} placeholder="Eine Aufgabe pro Zeile" rows={3} style={{ marginBottom: '8px', width: '100%' }} />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button className="btn btn-primary" onClick={handleListImport}>Importieren</button>
               <button className="btn btn-ghost" onClick={() => setShowListImport(false)}>Abbrechen</button>
             </div>
@@ -491,8 +512,32 @@ export default function ProjectPage() {
       {showParticipants && <ManageParticipantsModal projectId={id} participants={participants} isCreator={isCreator} currentUser={userName!} onClose={() => setShowParticipants(false)} onUpdated={loadParticipants} />}
 
       <style>{`
-        .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .modal { background: var(--bg-primary); border-radius: 16px; padding: 20px; width: 90%; max-width: 480px; box-shadow: 0 20px 35px rgba(0,0,0,0.2); }
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: 16px;
+        }
+        .modal {
+          background: var(--bg-primary);
+          border-radius: 16px;
+          padding: 20px;
+          width: 100%;
+          max-width: 480px;
+          box-shadow: 0 20px 35px rgba(0,0,0,0.2);
+        }
+        @media (max-width: 480px) {
+          .modal {
+            padding: 16px;
+          }
+        }
       `}</style>
     </div>
   )
