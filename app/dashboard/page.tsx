@@ -168,7 +168,14 @@ export default function DashboardPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
 
-      <main style={{ width: '100%', maxWidth: '100%', padding: '16px' }}>
+      <main
+  style={{
+    width: '100%',
+    maxWidth: '100%',
+    padding: '16px',
+    paddingBottom: '140px'
+  }}
+>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
