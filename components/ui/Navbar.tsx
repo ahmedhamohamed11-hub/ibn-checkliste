@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { useTheme } from '@/hooks/useTheme'
+import { supabase } from '@/lib/supabase'
 import { Thermometer, LayoutDashboard, Star, BookTemplate, Moon, Sun, LogOut, ChevronDown, X } from 'lucide-react'
 import { useState } from 'react'
 
@@ -27,6 +28,15 @@ export default function Navbar() {
       setEditingName(false)
       setShowUserMenu(false)
     }
+  }
+
+  // NEU: Logout-Funktion
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    // Setze den Benutzernamen zurück (falls dein useUser das nicht automatisch tut)
+    setUserName(null)
+    router.push('/')
+    setShowUserMenu(false)
   }
 
   return (
@@ -146,7 +156,7 @@ export default function Navbar() {
                       ✏️ Name ändern
                     </button>
                     <button
-                      onClick={() => { router.push('/'); setShowUserMenu(false) }}
+                      onClick={handleLogout} // ✅ korrigierter Logout
                       style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '10px 12px', borderRadius: '8px', color: 'var(--danger)', fontSize: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', minHeight: 'auto' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'none')}
@@ -192,13 +202,10 @@ export default function Navbar() {
         })}
       </nav>
 
-      {/* Spacer so content isn't hidden behind bottom nav on mobile */}
-
       {/* Click-outside to close user menu */}
       {showUserMenu && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 39 }} onClick={() => setShowUserMenu(false)} />
       )}
-
     </>
   )
 }
