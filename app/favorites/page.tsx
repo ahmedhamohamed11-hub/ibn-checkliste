@@ -90,7 +90,7 @@ export default function FavoritesPage() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
-      <main style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px' }}>
+      <main className="main-content" style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
           <Star size={22} style={{ color: '#f59e0b' }} />
           <h1 style={{ color: 'var(--text-primary)', fontSize: '22px', fontWeight: 800 }}>Favoriten</h1>
