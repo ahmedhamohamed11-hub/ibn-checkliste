@@ -4,19 +4,249 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { supabase } from '@/lib/supabase'
-import { Project, Task, ProjectParticipant, Comment, ActivityLog, TaskStatus } from '@/types'
+import { Project, Task, ProjectParticipant, TaskStatus } from '@/types'
 import Navbar from '@/components/ui/Navbar'
 import ProgressBar from '@/components/ui/ProgressBar'
 import TaskCard from '@/components/TaskCard'
 import ActivityModal from '@/components/ActivityModal'
 import EditProjectModal from '@/components/EditProjectModal'
-import AddTaskModal from '@/components/AddTaskModal'
 import ManageParticipantsModal from '@/components/ManageParticipantsModal'
 import {
-  ArrowLeft, Plus, History, Settings, Users, ListPlus, Filter, Star, Trash2
+  ArrowLeft, Plus, History, Settings, Users, ListPlus, Star, Trash2
 } from 'lucide-react'
 
 type FilterStatus = 'alle' | TaskStatus
+
+// ==================== ERWEITERTES ADD TASK MODAL MIT FAVORITEN ====================
+interface AddTaskModalProps {
+  projectId: string
+  userName: string
+  nextPosition: number
+  onClose: () => void
+  onCreated: () => void
+  // Favoriten-Funktionen und -Daten werden von der Parent-Komponente übergeben
+  favorites: string[]
+  addFavorite: (name: string) => void
+  removeFavorite: (name: string) => void
+}
+
+function AddTaskModal({
+  projectId,
+  userName,
+  nextPosition,
+  onClose,
+  onCreated,
+  favorites,
+  addFavorite,
+  removeFavorite,
+}: AddTaskModalProps) {
+  const [mode, setMode] = useState<'manual' | 'favorite'>('manual')
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [selectedFavorite, setSelectedFavorite] = useState(favorites[0] || '')
+  const [newFavoriteName, setNewFavoriteName] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // Manuelle Aufgabe erstellen
+  const handleCreateManual = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!title.trim()) return
+    setLoading(true)
+
+    const { error } = await supabase.from('tasks').insert({
+      project_id: projectId,
+      title: title.trim(),
+      description: description.trim() || null,
+      status: 'offen',
+      created_by: userName,
+      position: nextPosition,
+    })
+
+    if (!error) {
+      await supabase.from('activity_log').insert({
+        project_id: projectId,
+        actor: userName,
+        action: 'Aufgabe hinzugefügt',
+        detail: title.trim(),
+      })
+      onCreated()
+      onClose()
+    }
+    setLoading(false)
+  }
+
+  // Aufgabe aus ausgewähltem Favoriten erstellen
+  const handleCreateFromFavorite = async () => {
+    if (!selectedFavorite) return
+    setLoading(true)
+
+    const { error } = await supabase.from('tasks').insert({
+      project_id: projectId,
+      title: selectedFavorite,
+      description: null,
+      status: 'offen',
+      created_by: userName,
+      position: nextPosition,
+    })
+
+    if (!error) {
+      await supabase.from('activity_log').insert({
+        project_id: projectId,
+        actor: userName,
+        action: 'Aufgabe aus Favorit hinzugefügt',
+        detail: selectedFavorite,
+      })
+      onCreated()
+      onClose()
+    }
+    setLoading(false)
+  }
+
+  // Neuen Favoriten hinzufügen (wird in der Liste gespeichert)
+  const handleAddFavorite = () => {
+    const trimmed = newFavoriteName.trim()
+    if (!trimmed) return
+    if (favorites.includes(trimmed)) {
+      alert('Dieser Favorit existiert bereits')
+      return
+    }
+    addFavorite(trimmed)
+    setNewFavoriteName('')
+    setSelectedFavorite(trimmed)
+  }
+
+  // Favorit löschen
+  const handleRemoveFavorite = () => {
+    if (!selectedFavorite) return
+    removeFavorite(selectedFavorite)
+    setSelectedFavorite(favorites.filter(f => f !== selectedFavorite)[0] || '')
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+        <h3 style={{ marginBottom: '20px', color: 'var(--text-primary)' }}>Neue Aufgabe</h3>
+
+        {/* Auswahl zwischen manuell und Favorit */}
+        <div style={{ display: 'flex', gap: '24px', marginBottom: '24px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="taskMode"
+              value="manual"
+              checked={mode === 'manual'}
+              onChange={() => setMode('manual')}
+            />
+            <span>Neue Aufgabe manuell erstellen</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+            <input
+              type="radio"
+              name="taskMode"
+              value="favorite"
+              checked={mode === 'favorite'}
+              onChange={() => setMode('favorite')}
+            />
+            <span>Aus Favoriten übernehmen</span>
+          </label>
+        </div>
+
+        {mode === 'manual' ? (
+          <form onSubmit={handleCreateManual}>
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>Titel *</label>
+            <input
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Aufgabe beschreiben ..."
+              autoFocus
+              style={{ marginBottom: '16px' }}
+            />
+            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>Beschreibung (optional)</label>
+            <textarea
+              className="input"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optionale Details ..."
+              rows={3}
+              style={{ marginBottom: '24px', resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={onClose}>Abbrechen</button>
+              <button type="submit" className="btn btn-primary" disabled={loading || !title.trim()}>
+                {loading ? 'Wird erstellt…' : 'Aufgabe erstellen'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div>
+            {/* Favoriten-Auswahl */}
+            {favorites.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Keine Favoriten gespeichert. Erstelle unten einen neuen Favoriten.
+              </p>
+            ) : (
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>Favorit auswählen</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select
+                    className="input"
+                    value={selectedFavorite}
+                    onChange={(e) => setSelectedFavorite(e.target.value)}
+                    style={{ flex: 2, minWidth: '180px' }}
+                  >
+                    {favorites.map((fav, idx) => (
+                      <option key={idx} value={fav}>{fav}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={handleRemoveFavorite}
+                    style={{ color: 'var(--text-muted)' }}
+                    disabled={favorites.length === 0}
+                  >
+                    <Trash2 size={16} /> Löschen
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Bereich zum Hinzufügen neuer Favoriten */}
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 500 }}>Neuen Favoriten speichern</label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <input
+                  className="input"
+                  placeholder="z. B. Messprotokolle erstellen"
+                  value={newFavoriteName}
+                  onChange={(e) => setNewFavoriteName(e.target.value)}
+                  style={{ flex: 2 }}
+                />
+                <button type="button" className="btn btn-secondary" onClick={handleAddFavorite}>
+                  <Star size={14} style={{ marginRight: '4px' }} /> Als Favorit speichern
+                </button>
+              </div>
+            </div>
+
+            {/* Button zum Erstellen der Aufgabe aus gewähltem Favoriten */}
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={onClose}>Abbrechen</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleCreateFromFavorite}
+                disabled={loading || favorites.length === 0 || !selectedFavorite}
+              >
+                {loading ? 'Wird erstellt…' : 'Aufgabe aus Favorit erstellen'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+// ==================== ENDE ADD TASK MODAL ====================
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
@@ -39,87 +269,38 @@ export default function ProjectPage() {
 
   // ==================== FAVORITEN (localStorage) ====================
   const [favorites, setFavorites] = useState<string[]>([])
-  const [selectedFavorite, setSelectedFavorite] = useState<string>('')
-  const [newFavoriteName, setNewFavoriteName] = useState('')
 
-  // Favoriten laden (pro Benutzer + Projekt)
   const loadFavorites = useCallback(() => {
     if (!userName || !id) return
     const key = `favorites_${userName}_${id}`
     const stored = localStorage.getItem(key)
     if (stored) {
       try {
-        const favs = JSON.parse(stored)
-        setFavorites(favs)
-        if (favs.length > 0 && !selectedFavorite) setSelectedFavorite(favs[0])
-      } catch {
-        setFavorites([])
-      }
+        setFavorites(JSON.parse(stored))
+      } catch { setFavorites([]) }
     } else {
       setFavorites([])
     }
-  }, [userName, id, selectedFavorite])
+  }, [userName, id])
 
-  // Favoriten speichern
   const saveFavorites = (newFavs: string[]) => {
     if (!userName || !id) return
     const key = `favorites_${userName}_${id}`
     localStorage.setItem(key, JSON.stringify(newFavs))
     setFavorites(newFavs)
-    if (newFavs.length > 0 && !selectedFavorite) setSelectedFavorite(newFavs[0])
-    if (newFavs.length === 0) setSelectedFavorite('')
   }
 
-  // Neuen Favoriten hinzufügen
-  const addFavorite = () => {
-    const trimmed = newFavoriteName.trim()
-    if (!trimmed) return
-    if (favorites.includes(trimmed)) {
-      alert('Dieser Favorit existiert bereits')
-      return
-    }
-    saveFavorites([...favorites, trimmed])
-    setNewFavoriteName('')
-    setSelectedFavorite(trimmed)
+  const addFavorite = (name: string) => {
+    if (favorites.includes(name)) return
+    saveFavorites([...favorites, name])
   }
 
-  // Favorit löschen
-  const removeFavorite = () => {
-    if (!selectedFavorite) return
-    const newFavs = favorites.filter(f => f !== selectedFavorite)
-    saveFavorites(newFavs)
-    if (newFavs.length > 0) setSelectedFavorite(newFavs[0])
-    else setSelectedFavorite('')
+  const removeFavorite = (name: string) => {
+    saveFavorites(favorites.filter(f => f !== name))
   }
 
-  // Aufgabe aus ausgewähltem Favoriten erstellen
-  const addTaskFromSelectedFavorite = async () => {
-    if (!selectedFavorite) return
-    if (!id || !userName) return
-    const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position)) + 1 : 0
-    const { error } = await supabase.from('tasks').insert({
-      project_id: id,
-      title: selectedFavorite,
-      status: 'offen',
-      created_by: userName,
-      position: maxPos,
-    })
-    if (!error) {
-      await supabase.from('activity_log').insert({
-        project_id: id,
-        actor: userName,
-        action: 'Aufgabe aus Favorit hinzugefügt',
-        detail: selectedFavorite,
-      })
-      loadTasks()
-    }
-  }
-
-  // Favoriten bei Seitenladung laden
   useEffect(() => {
-    if (userName && id) {
-      loadFavorites()
-    }
+    if (userName && id) loadFavorites()
   }, [userName, id, loadFavorites])
   // ==================== ENDE FAVORITEN ====================
 
@@ -200,7 +381,7 @@ export default function ProjectPage() {
   const isParticipant = participants.some(p => p.user_name === userName)
   const isCreator = project?.creator_name === userName
 
-  // Sortierung: in_arbeit > offen > erledigt
+  // Sortierung: in_arbeit → offen → erledigt
   const statusOrder = { in_arbeit: 0, offen: 1, erledigt: 2 }
   const filteredAndSortedTasks = tasks
     .filter(t => {
@@ -300,53 +481,6 @@ export default function ProjectPage() {
             <span style={{ fontSize: '12px', color: '#10b981' }}>✅ {doneCount} erledigt</span>
           </div>
         </div>
-
-        {/* ==================== NEUER FAVORITEN-BEREICH ==================== */}
-        <div className="card" style={{ padding: '16px', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <Star size={18} style={{ color: '#f59e0b' }} />
-            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Aufgabe aus Favorit</h3>
-          </div>
-
-          {favorites.length === 0 ? (
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-              Noch keine Favoriten gespeichert. Erstelle unten einen neuen Favoriten.
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
-              <select
-                className="input"
-                value={selectedFavorite}
-                onChange={(e) => setSelectedFavorite(e.target.value)}
-                style={{ flex: '2', minWidth: '160px' }}
-              >
-                {favorites.map((fav, idx) => (
-                  <option key={idx} value={fav}>{fav}</option>
-                ))}
-              </select>
-              <button className="btn btn-primary" onClick={addTaskFromSelectedFavorite} style={{ whiteSpace: 'nowrap' }}>
-                <Plus size={14} style={{ marginRight: '4px' }} /> Aufgabe aus Favorit
-              </button>
-              <button className="btn btn-ghost" onClick={removeFavorite} style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}>
-                <Trash2 size={14} style={{ marginRight: '4px' }} /> Löschen
-              </button>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
-            <input
-              className="input"
-              placeholder="Neuen Favoriten speichern (z. B. Dokumentation prüfen)"
-              value={newFavoriteName}
-              onChange={(e) => setNewFavoriteName(e.target.value)}
-              style={{ flex: 2, minWidth: '180px' }}
-            />
-            <button className="btn btn-secondary" onClick={addFavorite} style={{ whiteSpace: 'nowrap' }}>
-              <Star size={14} style={{ marginRight: '4px' }} /> Als Favorit speichern
-            </button>
-          </div>
-        </div>
-        {/* ==================== ENDE FAVORITEN ==================== */}
 
         {/* Filter + Suche + Buttons */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -454,6 +588,9 @@ export default function ProjectPage() {
           nextPosition={tasks.length}
           onClose={() => setShowAddTask(false)}
           onCreated={loadTasks}
+          favorites={favorites}
+          addFavorite={addFavorite}
+          removeFavorite={removeFavorite}
         />
       )}
       {showParticipants && (
@@ -467,7 +604,26 @@ export default function ProjectPage() {
         />
       )}
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); }}`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); }}
+        .modal-overlay {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+        .modal {
+          background: var(--bg-primary);
+          border-radius: 16px;
+          padding: 24px;
+          width: 90%;
+          max-width: 550px;
+          box-shadow: 0 20px 35px rgba(0,0,0,0.2);
+        }
+      `}</style>
     </div>
   )
 }
