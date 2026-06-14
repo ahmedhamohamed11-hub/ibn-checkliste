@@ -92,7 +92,7 @@ export default function ProjectPage() {
     })
     loadTasks()
   }
- {const addFavoritesToProject = async () => {
+ const addFavoritesToProject = async () => {
   const { data } = await supabase
     .from('favorites')
     .select('*')
@@ -117,25 +117,30 @@ export default function ProjectPage() {
   loadTasks()
   setShowFavorites(false)
 }
-  const handleListImport = async ()
-  
-    const lines = listInput.split('\n').map(l => l.trim()).filter(Boolean)
-    if (!lines.length) return
-    const maxPos = tasks.length > 0 ? Math.max(...tasks.map(t => t.position)) + 1 : 0
-    await supabase.from('tasks').insert(
-      lines.map((title, i) => ({
-        project_id: id, title, status: 'offen',
-        created_by: userName, position: maxPos + i,
-      }))
-    )
-    await supabase.from('activity_log').insert({
-      project_id: id, actor: userName,
-      action: `${lines.length} Aufgaben importiert`, detail: lines.join(', '),
-    })
-    setListInput('')
-    setShowListImport(false)
-    loadTasks()
-  }
+ const handleListImport = async () => {
+  const lines = listInput.split('\n').map(l => l.trim()).filter(Boolean)
+
+  if (!lines.length) return
+
+  const maxPos =
+    tasks.length > 0
+      ? Math.max(...tasks.map(t => t.position)) + 1
+      : 0
+
+  await supabase.from('tasks').insert(
+    lines.map((title, i) => ({
+      project_id: id,
+      title,
+      status: 'offen',
+      created_by: userName,
+      position: maxPos + i,
+    }))
+  )
+
+  setListInput('')
+  setShowListImport(false)
+  loadTasks()
+}
 
   const isParticipant = participants.some(p => p.user_name === userName)
   const isCreator = project?.creator_name === userName
@@ -323,11 +328,18 @@ export default function ProjectPage() {
             style={{ flex: 1, minWidth: '150px' }}
           />
 
-          <button className="btn btn-primary" onClick={() => setShowAddTask(true)} style={{ padding: '10px 14px', minHeight: 'auto', whiteSpace: 'nowrap' }}>
-            <Plus size={16} /> Aufgabe
-            <button
+         <button
+  className="btn btn-primary"
+  onClick={() => setShowAddTask(true)}
+  style={{ padding: '10px 14px', minHeight: 'auto', whiteSpace: 'nowrap' }}
+>
+  <Plus size={16} /> Aufgabe
+</button>
+
+<button
   className="btn btn-ghost"
   onClick={addFavoritesToProject}
+  style={{ padding: '10px 14px', minHeight: 'auto' }}
 >
   ⭐ Favoriten
 </button>
