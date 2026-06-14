@@ -3,14 +3,35 @@
   "short_name": "IBN-Check",
   "description": "Professionelle Checklisten-App für Kälte-, Klima- und Wärmepumpentechnik",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0a0f1e",
   "theme_color": "#0a0f1e",
   "orientation": "any",
-  "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
-  ],
+  "lang": "de",
   "categories": ["productivity", "utilities"],
-  "lang": "de"
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Neue Checkliste",
+      "short_name": "Neu",
+      "description": "Neue Inbetriebnahme starten",
+      "url": "/?action=new",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }
