@@ -7,7 +7,7 @@ import { useUser } from '@/hooks/useUser'
 import { supabase } from '@/lib/supabase'
 import { PROJECT_TEMPLATES } from '@/lib/constants'
 import Navbar from '@/components/ui/Navbar'
-import { BookTemplate, ChevronRight, Edit, Trash2, Plus, X, ArrowUp, ArrowDown, Lock } from 'lucide-react'
+import { BookTemplate, ChevronRight, Edit, Trash2, Plus, X, ArrowUp, ArrowDown, Lock, Star, Check } from 'lucide-react'
 
 interface Template {
   id: string
@@ -20,6 +20,12 @@ interface TemplateTask {
   id: string
   title: string
   description: string | null
+  position: number
+}
+
+interface Favorite {
+  id: string
+  title: string
   position: number
 }
 
@@ -36,8 +42,16 @@ export default function TemplatesPage() {
   const [templateTasks, setTemplateTasks] = useState<TemplateTask[]>([])
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [editingTaskTitle, setEditingTaskTitle] = useState('')
   const [saving, setSaving] = useState(false)
   const [creatingProject, setCreatingProject] = useState<string | null>(null)
+
+  // Favoriten-Auswahl-State
+  const [favorites, setFavorites] = useState<Favorite[]>([])
+  const [selectedFavIds, setSelectedFavIds] = useState<Set<string>>(new Set())
+  const [showFavPicker, setShowFavPicker] = useState(false)
+  // Beim Erstellen: nach Speichern sofort Favoriten auswählen
+  const [createStep, setCreateStep] = useState<'name' | 'tasks'>('name')
 
   useEffect(() => {
     if (!userName) {
@@ -45,12 +59,22 @@ export default function TemplatesPage() {
       return
     }
     loadTemplates()
+    loadFavorites()
   }, [userName])
+
+  const loadFavorites = async () => {
+    if (!userName) return
+    const { data } = await supabase
+      .from('favorites')
+      .select('id, title, position')
+      .eq('user_name', userName)
+      .order('position', { ascending: true })
+    setFavorites(data || [])
+  }
 
   const loadTemplates = async () => {
     if (!userName) return
     setLoading(true)
-    // Vorlagen laden
     const { data, error } = await supabase
       .from('templates')
       .select('*')
@@ -58,7 +82,6 @@ export default function TemplatesPage() {
       .order('created_at', { ascending: false })
     if (!error && data) {
       setTemplates(data)
-      // Aufgaben für jede Vorlage laden
       const tasksMap: Record<string, TemplateTask[]> = {}
       for (const t of data) {
         const { data: tasks } = await supabase
@@ -87,80 +110,115 @@ export default function TemplatesPage() {
     setEditingTemplate(template)
     setTemplateName(template.name)
     setTemplateDescription(template.description || '')
+    setCreateStep('tasks')
+    setShowFavPicker(false)
+    setSelectedFavIds(new Set())
     await loadTemplateTasks(template.id)
   }
 
-  const closeEdit = () => {
+  const openCreate = () => {
+    setEditingTemplate(null)
+    setTemplateName('')
+    setTemplateDescription('')
+    setTemplateTasks([])
+    setCreateStep('name')
+    setShowFavPicker(false)
+    setSelectedFavIds(new Set())
+    setShowCreateModal(true)
+  }
+
+  const closeModal = () => {
     setEditingTemplate(null)
     setTemplateName('')
     setTemplateDescription('')
     setTemplateTasks([])
     setNewTaskTitle('')
     setEditingTaskId(null)
+    setEditingTaskTitle('')
     setShowCreateModal(false)
+    setShowFavPicker(false)
+    setSelectedFavIds(new Set())
+    setCreateStep('name')
   }
 
-  const saveTemplate = async () => {
-    if (!userName) return
-    if (!templateName.trim()) return
+  // Schritt 1: Name speichern und zu Aufgaben wechseln
+  const saveNameAndNext = async () => {
+    if (!userName || !templateName.trim()) return
     setSaving(true)
-
-    if (editingTemplate) {
-      await supabase
-        .from('templates')
-        .update({ name: templateName, description: templateDescription, updated_at: new Date().toISOString() })
-        .eq('id', editingTemplate.id)
-    } else {
-      const { data } = await supabase
-        .from('templates')
-        .insert({ name: templateName, description: templateDescription, created_by: userName })
-        .select()
-        .single()
-      if (data) {
-        setEditingTemplate(data)
-        await loadTemplateTasks(data.id)
-      }
+    const { data } = await supabase
+      .from('templates')
+      .insert({ name: templateName.trim(), description: templateDescription.trim() || null, created_by: userName })
+      .select()
+      .single()
+    if (data) {
+      setEditingTemplate(data)
+      setTemplateTasks([])
+      setCreateStep('tasks')
     }
-    await loadTemplates()
     setSaving(false)
-    if (!editingTemplate) {
-      setShowCreateModal(false)
-      closeEdit()
-    }
+  }
+
+  // Name der Vorlage aktualisieren (beim Bearbeiten)
+  const updateTemplateName = async () => {
+    if (!editingTemplate || !templateName.trim()) return
+    await supabase
+      .from('templates')
+      .update({ name: templateName.trim(), description: templateDescription.trim() || null, updated_at: new Date().toISOString() })
+      .eq('id', editingTemplate.id)
+    await loadTemplates()
   }
 
   const deleteTemplate = async (id: string) => {
-    if (!confirm('Vorlage wirklich löschen? Alle Aufgaben werden ebenfalls gelöscht.')) return
+    if (!confirm('Vorlage wirklich löschen? Alle Aufgaben der Vorlage werden entfernt.')) return
     await supabase.from('templates').delete().eq('id', id)
     await loadTemplates()
-    if (editingTemplate?.id === id) closeEdit()
+    if (editingTemplate?.id === id) closeModal()
   }
 
+  // Einzelne Aufgabe manuell hinzufügen
   const addTask = async () => {
     if (!newTaskTitle.trim() || !editingTemplate) return
     const maxPos = templateTasks.length > 0 ? Math.max(...templateTasks.map(t => t.position)) + 1 : 0
     const { data } = await supabase
       .from('template_tasks')
-      .insert({
-        template_id: editingTemplate.id,
-        title: newTaskTitle.trim(),
-        position: maxPos,
-      })
+      .insert({ template_id: editingTemplate.id, title: newTaskTitle.trim(), position: maxPos })
       .select()
       .single()
-    if (data) setTemplateTasks([...templateTasks, data])
+    if (data) setTemplateTasks(prev => [...prev, data])
     setNewTaskTitle('')
   }
 
+  // Mehrere Favoriten auf einmal hinzufügen
+  const addSelectedFavorites = async () => {
+    if (!editingTemplate || selectedFavIds.size === 0) return
+    setSaving(true)
+    const toAdd = favorites.filter(f => selectedFavIds.has(f.id))
+    const existingTitles = new Set(templateTasks.map(t => t.title.toLowerCase()))
+    const newOnes = toAdd.filter(f => !existingTitles.has(f.title.toLowerCase()))
+    const maxPos = templateTasks.length > 0 ? Math.max(...templateTasks.map(t => t.position)) + 1 : 0
+    if (newOnes.length > 0) {
+      const { data } = await supabase
+        .from('template_tasks')
+        .insert(newOnes.map((f, i) => ({ template_id: editingTemplate.id, title: f.title, position: maxPos + i })))
+        .select()
+      if (data) setTemplateTasks(prev => [...prev, ...data].sort((a, b) => a.position - b.position))
+    }
+    setSelectedFavIds(new Set())
+    setShowFavPicker(false)
+    setSaving(false)
+  }
+
   const updateTask = async (taskId: string, newTitle: string) => {
-    await supabase.from('template_tasks').update({ title: newTitle }).eq('id', taskId)
-    setTemplateTasks(templateTasks.map(t => t.id === taskId ? { ...t, title: newTitle } : t))
+    if (!newTitle.trim()) return
+    await supabase.from('template_tasks').update({ title: newTitle.trim() }).eq('id', taskId)
+    setTemplateTasks(prev => prev.map(t => t.id === taskId ? { ...t, title: newTitle.trim() } : t))
     setEditingTaskId(null)
+    setEditingTaskTitle('')
   }
 
   const deleteTask = async (taskId: string) => {
     await supabase.from('template_tasks').delete().eq('id', taskId)
-    setTemplateTasks(templateTasks.filter(t => t.id !== taskId))
+    setTemplateTasks(prev => prev.filter(t => t.id !== taskId))
   }
 
   const moveTask = async (taskId: string, direction: 'up' | 'down') => {
@@ -177,98 +235,69 @@ export default function TemplatesPage() {
     setTemplateTasks(newTasks.sort((a, b) => a.position - b.position))
   }
 
-  const createProjectFromSystemTemplate = async (templateName: string, tasks: string[]) => {
+  const toggleFav = (id: string) => {
+    setSelectedFavIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const selectAllFavs = () => {
+    const existingTitles = new Set(templateTasks.map(t => t.title.toLowerCase()))
+    const available = favorites.filter(f => !existingTitles.has(f.title.toLowerCase()))
+    setSelectedFavIds(new Set(available.map(f => f.id)))
+  }
+
+  const createProjectFromSystemTemplate = async (tplName: string, tasks: string[]) => {
     if (!userName) return
-    setCreatingProject(templateName)
+    setCreatingProject(tplName)
     try {
       const { data: newProject, error: projectError } = await supabase
         .from('projects')
-        .insert({
-          name: templateName,
-          commissioning_date: null,
-          creator_name: userName,
-          archived: false,
-        })
-        .select()
-        .single()
-      if (projectError || !newProject) throw new Error('Projekt konnte nicht erstellt werden')
-      await supabase.from('project_participants').insert({
-        project_id: newProject.id,
-        user_name: userName,
-      })
+        .insert({ name: tplName, commissioning_date: null, creator_name: userName, archived: false })
+        .select().single()
+      if (projectError || !newProject) throw new Error('Fehler')
+      await supabase.from('project_participants').insert({ project_id: newProject.id, user_name: userName })
       if (tasks.length > 0) {
-        await supabase.from('tasks').insert(
-          tasks.map((title, i) => ({
-            project_id: newProject.id,
-            title,
-            status: 'offen',
-            created_by: userName,
-            position: i,
-          }))
-        )
+        await supabase.from('tasks').insert(tasks.map((title, i) => ({
+          project_id: newProject.id, title, status: 'offen', created_by: userName, position: i,
+        })))
       }
       await supabase.from('activity_log').insert({
-        project_id: newProject.id,
-        actor: userName,
-        action: 'Projekt aus Standardvorlage erstellt',
-        detail: templateName,
+        project_id: newProject.id, actor: userName, action: 'Projekt aus Standardvorlage erstellt', detail: tplName,
       })
       router.push(`/project/${newProject.id}`)
-    } catch (err) {
-      console.error(err)
-      alert('Fehler beim Erstellen des Projekts')
-    } finally {
-      setCreatingProject(null)
-    }
+    } catch { alert('Fehler beim Erstellen des Projekts') }
+    finally { setCreatingProject(null) }
   }
 
   const createProjectFromTemplate = async (template: Template) => {
     if (!userName) return
     setCreatingProject(template.id)
     try {
-      // 1. Projekt erstellen
       const { data: newProject, error: projectError } = await supabase
         .from('projects')
-        .insert({
-          name: template.name,
-          commissioning_date: null,
-          creator_name: userName,
-          archived: false,
-        })
-        .select()
-        .single()
-      if (projectError || !newProject) throw new Error('Projekt konnte nicht erstellt werden')
-      // 2. Teilnehmer (Ersteller) hinzufügen
-      await supabase.from('project_participants').insert({
-        project_id: newProject.id,
-        user_name: userName,
-      })
-      // 3. Aufgaben der Vorlage kopieren
+        .insert({ name: template.name, commissioning_date: null, creator_name: userName, archived: false })
+        .select().single()
+      if (projectError || !newProject) throw new Error('Fehler')
+      await supabase.from('project_participants').insert({ project_id: newProject.id, user_name: userName })
       const { data: tasks } = await supabase
-        .from('template_tasks')
-        .select('title, description, position')
-        .eq('template_id', template.id)
-        .order('position')
+        .from('template_tasks').select('title, description, position')
+        .eq('template_id', template.id).order('position')
       if (tasks && tasks.length > 0) {
-        await supabase.from('tasks').insert(
-          tasks.map(t => ({
-            project_id: newProject.id,
-            title: t.title,
-            description: t.description,
-            status: 'offen',
-            created_by: userName,
-            position: t.position,
-          }))
-        )
+        await supabase.from('tasks').insert(tasks.map(t => ({
+          project_id: newProject.id, title: t.title, description: t.description,
+          status: 'offen', created_by: userName, position: t.position,
+        })))
       }
       router.push(`/project/${newProject.id}`)
-    } catch (err) {
-      console.error(err)
-      alert('Fehler beim Erstellen des Projekts')
-    } finally {
-      setCreatingProject(null)
-    }
+    } catch { alert('Fehler beim Erstellen des Projekts') }
+    finally { setCreatingProject(null) }
   }
+
+  const isModalOpen = showCreateModal || editingTemplate !== null
+  const existingTitles = new Set(templateTasks.map(t => t.title.toLowerCase()))
 
   if (loading) {
     return (
@@ -283,12 +312,14 @@ export default function TemplatesPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
       <main style={{ maxWidth: '700px', margin: '0 auto', padding: '24px 16px 80px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <BookTemplate size={22} style={{ color: 'var(--accent-light)' }} />
             <h1 style={{ fontSize: '22px', fontWeight: 800 }}>Projektvorlagen</h1>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowCreateModal(true)} style={{ padding: '6px 12px' }}>
+          <button className="btn btn-primary" onClick={openCreate} style={{ padding: '6px 12px' }}>
             <Plus size={16} /> Neue Vorlage
           </button>
         </div>
@@ -296,18 +327,16 @@ export default function TemplatesPage() {
           Wähle beim Erstellen eines Projekts eine Vorlage — Aufgaben werden automatisch übernommen.
         </p>
 
-        {/* Standardvorlagen (fest eingebaut) */}
+        {/* Standardvorlagen */}
         <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
           <Lock size={14} /> Standardvorlagen
         </h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' }}>
           {Object.entries(PROJECT_TEMPLATES).map(([name, tasks]) => (
             <div key={name} className="card" style={{ padding: '14px 18px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                <div>
-                  <h2 style={{ fontSize: '16px', fontWeight: 700 }}>{name}</h2>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{tasks.length} Aufgaben</p>
-                </div>
+              <div style={{ marginBottom: '10px' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: 700 }}>{name}</h2>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{tasks.length} Aufgaben</p>
               </div>
               <div style={{ marginBottom: '12px' }}>
                 {tasks.slice(0, 4).map((task, i) => (
@@ -339,11 +368,13 @@ export default function TemplatesPage() {
         <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '10px', color: 'var(--text-secondary)' }}>
           Eigene Vorlagen
         </h2>
-
         {templates.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
             <BookTemplate size={48} style={{ color: 'var(--text-muted)', marginBottom: '12px' }} />
             <p>Keine eigenen Vorlagen vorhanden</p>
+            <button className="btn btn-primary" onClick={openCreate} style={{ marginTop: '16px' }}>
+              <Plus size={14} /> Erste Vorlage erstellen
+            </button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -357,10 +388,11 @@ export default function TemplatesPage() {
                       {template.description && (
                         <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{template.description}</p>
                       )}
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{tasks.length} Aufgaben</p>
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                      <button className="btn btn-ghost" onClick={() => openEdit(template)} style={{ padding: '4px 8px' }}>
-                        <Edit size={14} />
+                      <button className="btn btn-ghost" onClick={() => openEdit(template)} style={{ padding: '4px 10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Edit size={13} /> Bearbeiten
                       </button>
                       <button className="btn btn-ghost" onClick={() => deleteTemplate(template.id)} style={{ padding: '4px 8px', color: 'var(--danger)' }}>
                         <Trash2 size={14} />
@@ -368,7 +400,6 @@ export default function TemplatesPage() {
                     </div>
                   </div>
 
-                  {/* Aufgabenliste – genau wie in der alten Version */}
                   <div style={{ marginBottom: '14px' }}>
                     {tasks.slice(0, 5).map(task => (
                       <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -390,7 +421,7 @@ export default function TemplatesPage() {
                     className="btn btn-primary"
                     onClick={() => createProjectFromTemplate(template)}
                     disabled={creatingProject === template.id}
-                    style={{ marginTop: '0', width: '100%', padding: '10px' }}
+                    style={{ width: '100%', padding: '10px' }}
                   >
                     {creatingProject === template.id ? 'Wird erstellt...' : 'Neues Projekt mit dieser Vorlage'}
                     <ChevronRight size={15} style={{ marginLeft: '6px' }} />
@@ -402,105 +433,270 @@ export default function TemplatesPage() {
         )}
       </main>
 
-      {/* Modal zum Erstellen/Bearbeiten einer Vorlage */}
-      {(showCreateModal || editingTemplate) && (
-        <div className="modal-overlay" onClick={closeEdit}>
+      {/* ═══════════════════════════════════════════════
+          MODAL: Neue Vorlage / Bearbeiten
+      ═══════════════════════════════════════════════ */}
+      {isModalOpen && (
+        <div className="modal-overlay" onClick={closeModal}>
           <div className="modal" onClick={e => e.stopPropagation()}>
+
+            {/* Modal-Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 700 }}>{editingTemplate ? 'Vorlage bearbeiten' : 'Neue Vorlage'}</h3>
-              <button onClick={closeEdit} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
-            </div>
-            <input
-              className="input"
-              placeholder="Name *"
-              value={templateName}
-              onChange={e => setTemplateName(e.target.value)}
-              style={{ marginBottom: '12px' }}
-            />
-            <textarea
-              className="input"
-              placeholder="Beschreibung (optional)"
-              value={templateDescription}
-              onChange={e => setTemplateDescription(e.target.value)}
-              rows={2}
-              style={{ marginBottom: '16px', resize: 'vertical' }}
-            />
-
-            {editingTemplate && (
-              <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>Aufgaben</h4>
-                <div style={{ maxHeight: '280px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px', marginBottom: '8px' }}>
-                  {templateTasks.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', padding: '12px' }}>Keine Aufgaben</p>}
-                  {templateTasks.map((task, idx) => (
-                    <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-                      {editingTaskId === task.id ? (
-                        <input
-                          autoFocus
-                          defaultValue={task.title}
-                          onBlur={e => updateTask(task.id, e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && updateTask(task.id, (e.target as HTMLInputElement).value)}
-                          style={{ flex: 1, padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-primary)' }}
-                        />
-                      ) : (
-                        <span style={{ flex: 1 }}>{task.title}</span>
-                      )}
-                      <button className="btn btn-ghost" onClick={() => setEditingTaskId(task.id)} style={{ padding: '2px 4px' }}><Edit size={12} /></button>
-                      <button className="btn btn-ghost" onClick={() => moveTask(task.id, 'up')} disabled={idx === 0} style={{ padding: '2px 4px' }}><ArrowUp size={12} /></button>
-                      <button className="btn btn-ghost" onClick={() => moveTask(task.id, 'down')} disabled={idx === templateTasks.length - 1} style={{ padding: '2px 4px' }}><ArrowDown size={12} /></button>
-                      <button className="btn btn-ghost" onClick={() => deleteTask(task.id)} style={{ padding: '2px 4px', color: 'var(--danger)' }}><Trash2 size={12} /></button>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    className="input"
-                    placeholder="Neue Aufgabe"
-                    value={newTaskTitle}
-                    onChange={e => setNewTaskTitle(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && addTask()}
-                    style={{ flex: 1 }}
-                  />
-                  <button className="btn btn-secondary" onClick={addTask}>Hinzufügen</button>
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
-              <button className="btn btn-ghost" onClick={closeEdit}>Abbrechen</button>
-              <button className="btn btn-primary" onClick={saveTemplate} disabled={!templateName.trim() || saving}>
-                {saving ? 'Speichern...' : 'Speichern'}
+              <h3 style={{ fontSize: '18px', fontWeight: 700 }}>
+                {editingTemplate ? 'Vorlage bearbeiten' : 'Neue Vorlage'}
+              </h3>
+              <button onClick={closeModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                <X size={20} />
               </button>
             </div>
+
+            {/* ── SCHRITT 1: Name eingeben (nur beim Erstellen) ── */}
+            {createStep === 'name' && !editingTemplate && (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+                  Gib zuerst einen Namen für die Vorlage ein.
+                </p>
+                <input
+                  className="input"
+                  placeholder="z. B. Hofer Filiale Wien, Wärmepumpe Vaillant ..."
+                  value={templateName}
+                  onChange={e => setTemplateName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveNameAndNext()}
+                  autoFocus
+                  style={{ marginBottom: '10px' }}
+                />
+                <textarea
+                  className="input"
+                  placeholder="Beschreibung (optional)"
+                  value={templateDescription}
+                  onChange={e => setTemplateDescription(e.target.value)}
+                  rows={2}
+                  style={{ marginBottom: '16px', resize: 'vertical' }}
+                />
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-ghost" onClick={closeModal}>Abbrechen</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={saveNameAndNext}
+                    disabled={!templateName.trim() || saving}
+                  >
+                    {saving ? 'Speichern...' : 'Weiter → Aufgaben wählen'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── SCHRITT 2: Aufgaben verwalten (Erstellen + Bearbeiten) ── */}
+            {(createStep === 'tasks' || editingTemplate) && (
+              <>
+                {/* Name bearbeiten */}
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Vorlagenname</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      className="input"
+                      value={templateName}
+                      onChange={e => setTemplateName(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    {editingTemplate && (
+                      <button className="btn btn-ghost" onClick={updateTemplateName} style={{ padding: '0 12px', whiteSpace: 'nowrap', fontSize: '13px' }}>
+                        Umbenennen
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Aufgabenliste */}
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Aufgaben ({templateTasks.length})
+                    </label>
+                  </div>
+
+                  {/* Aufgabenliste scrollbar */}
+                  <div style={{ maxHeight: '240px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '8px' }}>
+                    {templateTasks.length === 0 ? (
+                      <p style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', padding: '20px' }}>
+                        Noch keine Aufgaben — füge Favoriten oder eigene Aufgaben hinzu.
+                      </p>
+                    ) : (
+                      templateTasks.map((task, idx) => (
+                        <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 10px', borderBottom: idx < templateTasks.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                          {editingTaskId === task.id ? (
+                            <input
+                              autoFocus
+                              className="input"
+                              value={editingTaskTitle}
+                              onChange={e => setEditingTaskTitle(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') updateTask(task.id, editingTaskTitle)
+                                if (e.key === 'Escape') { setEditingTaskId(null); setEditingTaskTitle('') }
+                              }}
+                              style={{ flex: 1, padding: '4px 8px', fontSize: '13px' }}
+                            />
+                          ) : (
+                            <span style={{ flex: 1, fontSize: '13px' }}>{task.title}</span>
+                          )}
+                          {editingTaskId === task.id ? (
+                            <>
+                              <button className="btn btn-ghost" onClick={() => updateTask(task.id, editingTaskTitle)} style={{ padding: '3px 5px', color: 'var(--accent)' }}><Check size={13} /></button>
+                              <button className="btn btn-ghost" onClick={() => { setEditingTaskId(null); setEditingTaskTitle('') }} style={{ padding: '3px 5px' }}><X size={13} /></button>
+                            </>
+                          ) : (
+                            <>
+                              <button className="btn btn-ghost" onClick={() => { setEditingTaskId(task.id); setEditingTaskTitle(task.title) }} style={{ padding: '3px 5px' }} title="Bearbeiten"><Edit size={12} /></button>
+                              <button className="btn btn-ghost" onClick={() => moveTask(task.id, 'up')} disabled={idx === 0} style={{ padding: '3px 5px' }} title="Nach oben"><ArrowUp size={12} /></button>
+                              <button className="btn btn-ghost" onClick={() => moveTask(task.id, 'down')} disabled={idx === templateTasks.length - 1} style={{ padding: '3px 5px' }} title="Nach unten"><ArrowDown size={12} /></button>
+                              <button className="btn btn-ghost" onClick={() => deleteTask(task.id)} style={{ padding: '3px 5px', color: 'var(--danger)' }} title="Entfernen"><X size={13} /></button>
+                            </>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Manuell hinzufügen */}
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                    <input
+                      className="input"
+                      placeholder="Aufgabe manuell eingeben …"
+                      value={newTaskTitle}
+                      onChange={e => setNewTaskTitle(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addTask()}
+                      style={{ flex: 1, fontSize: '13px' }}
+                    />
+                    <button className="btn btn-ghost" onClick={addTask} disabled={!newTaskTitle.trim()} style={{ padding: '0 12px', whiteSpace: 'nowrap', fontSize: '13px' }}>
+                      <Plus size={13} /> Hinzufügen
+                    </button>
+                  </div>
+
+                  {/* Aus Favoriten hinzufügen – Button */}
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => { setShowFavPicker(v => !v); setSelectedFavIds(new Set()) }}
+                    style={{ width: '100%', padding: '9px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', border: '1px dashed var(--border)' }}
+                  >
+                    <Star size={14} style={{ color: '#f59e0b' }} />
+                    {showFavPicker ? 'Auswahl schließen' : 'Aus Favoriten hinzufügen'}
+                    {favorites.length > 0 && !showFavPicker && (
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>({favorites.length} verfügbar)</span>
+                    )}
+                  </button>
+                </div>
+
+                {/* ── FAVORITEN-PICKER ── */}
+                {showFavPicker && (
+                  <div style={{ border: '1px solid var(--border)', borderRadius: '10px', marginBottom: '12px', overflow: 'hidden' }}>
+                    {/* Picker-Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600 }}>
+                        {selectedFavIds.size > 0 ? `${selectedFavIds.size} ausgewählt` : 'Favoriten auswählen'}
+                      </span>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button className="btn btn-ghost" onClick={selectAllFavs} style={{ padding: '3px 8px', fontSize: '12px' }}>
+                          Alle wählen
+                        </button>
+                        <button className="btn btn-ghost" onClick={() => setSelectedFavIds(new Set())} style={{ padding: '3px 8px', fontSize: '12px' }}>
+                          Keine
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Favoritenliste */}
+                    {favorites.length === 0 ? (
+                      <p style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '20px', textAlign: 'center' }}>
+                        Keine Favoriten gespeichert. Geh zur Favoriten-Seite und füge welche hinzu.
+                      </p>
+                    ) : (
+                      <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                        {favorites.map(fav => {
+                          const alreadyIn = existingTitles.has(fav.title.toLowerCase())
+                          const checked = selectedFavIds.has(fav.id)
+                          return (
+                            <label
+                              key={fav.id}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '12px',
+                                padding: '9px 14px', cursor: alreadyIn ? 'default' : 'pointer',
+                                borderBottom: '1px solid var(--border)',
+                                opacity: alreadyIn ? 0.45 : 1,
+                                background: checked ? 'rgba(var(--accent-rgb, 59,130,246), 0.08)' : 'transparent',
+                                transition: 'background 0.1s',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={alreadyIn}
+                                onChange={() => !alreadyIn && toggleFav(fav.id)}
+                                style={{ width: '16px', height: '16px', accentColor: 'var(--accent)', cursor: alreadyIn ? 'default' : 'pointer' }}
+                              />
+                              <span style={{ fontSize: '14px', flex: 1 }}>{fav.title}</span>
+                              {alreadyIn && <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>bereits drin</span>}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Picker-Footer */}
+                    {selectedFavIds.size > 0 && (
+                      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: '8px', background: 'var(--bg-secondary)' }}>
+                        <button className="btn btn-ghost" onClick={() => { setShowFavPicker(false); setSelectedFavIds(new Set()) }} style={{ fontSize: '13px' }}>
+                          Abbrechen
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          onClick={addSelectedFavorites}
+                          disabled={saving}
+                          style={{ fontSize: '13px' }}
+                        >
+                          {saving ? 'Hinzufügen...' : `${selectedFavIds.size} Aufgabe${selectedFavIds.size > 1 ? 'n' : ''} übernehmen`}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Modal-Footer */}
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                  <button className="btn btn-ghost" onClick={closeModal}>Schließen</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={async () => {
+                      await loadTemplates()
+                      closeModal()
+                    }}
+                  >
+                    Fertig
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
 
       <style>{`
         .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0,0,0,0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          padding: 16px;
+          position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.55);
+          display: flex; align-items: center; justify-content: center;
+          z-index: 1000; padding: 16px;
         }
         .modal {
           background: var(--bg-primary);
-          border-radius: 16px;
-          padding: 20px;
-          width: 100%;
-          max-width: 600px;
-          box-shadow: 0 20px 35px rgba(0,0,0,0.2);
+          border-radius: 16px; padding: 20px;
+          width: 100%; max-width: 620px;
+          max-height: 92vh; overflow-y: auto;
+          box-shadow: 0 20px 40px rgba(0,0,0,0.25);
         }
         @media (max-width: 640px) {
-          .modal {
-            padding: 16px;
-          }
+          .modal { padding: 16px; border-radius: 12px; }
+          .modal-overlay { align-items: flex-end; padding: 0; }
+          .modal { border-bottom-left-radius: 0; border-bottom-right-radius: 0; max-height: 95vh; }
         }
       `}</style>
     </div>
