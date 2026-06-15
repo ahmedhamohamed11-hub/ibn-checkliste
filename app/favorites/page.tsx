@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { supabase } from '@/lib/supabase'
+import { DEFAULT_FAVORITES } from '@/lib/constants'
 import Navbar from '@/components/ui/Navbar'
-import { Star, Trash2, GripVertical, Edit, Check, X } from 'lucide-react'
+import { Star, Trash2, GripVertical, Edit, Check, X, Plus } from 'lucide-react'
 
 interface Favorite {
   id: string
@@ -46,6 +47,28 @@ export default function FavoritesPage() {
       setFavorites(data || [])
     }
     setLoading(false)
+  }
+
+  const importDefaultFavorites = async () => {
+    if (!userName) return
+    setSaving(true)
+    const existing = favorites.map(f => f.title.toLowerCase())
+    const toAdd = DEFAULT_FAVORITES.filter(t => !existing.includes(t.toLowerCase()))
+    if (toAdd.length === 0) {
+      alert('Alle Standardfavoriten sind bereits vorhanden.')
+      setSaving(false)
+      return
+    }
+    const maxPos = favorites.length > 0 ? Math.max(...favorites.map(f => f.position)) + 1 : 0
+    await supabase.from('favorites').insert(
+      toAdd.map((title, i) => ({
+        user_name: userName,
+        title,
+        position: maxPos + i,
+      }))
+    )
+    await loadFavorites()
+    setSaving(false)
   }
 
   const addFavorite = async () => {
@@ -114,16 +137,35 @@ export default function FavoritesPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar />
       <main style={{ maxWidth: '800px', margin: '0 auto', padding: '20px 16px 80px 16px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Star size={24} style={{ color: '#f59e0b' }} /> Meine Favoriten
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+          <h1 style={{ fontSize: '24px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Star size={24} style={{ color: '#f59e0b' }} /> Meine Favoriten
+          </h1>
+          <button
+            className="btn btn-ghost"
+            onClick={importDefaultFavorites}
+            disabled={saving}
+            style={{ fontSize: '13px', padding: '7px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+            title="Standardfavoriten importieren"
+          >
+            <Plus size={14} /> Standardliste importieren
+          </button>
+        </div>
 
         {/* Liste der Favoriten */}
         {favorites.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
             <Star size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
             <p>Keine Favoriten gespeichert.</p>
-            <p style={{ fontSize: '13px', marginTop: '8px' }}>Erstelle beim Anlegen einer Aufgabe einen Favoriten.</p>
+            <p style={{ fontSize: '13px', marginTop: '8px', marginBottom: '20px' }}>Importiere die Standardliste oder füge eigene hinzu.</p>
+            <button
+              className="btn btn-primary"
+              onClick={importDefaultFavorites}
+              disabled={saving}
+              style={{ margin: '0 auto' }}
+            >
+              <Plus size={14} /> Standardliste importieren ({DEFAULT_FAVORITES.length} Einträge)
+            </button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>

@@ -1,4 +1,4 @@
-export type TaskStatus = 'offen' | 'in_arbeit' | 'erledigt'
+export type TaskStatus = 'offen' | 'in_arbeit' | 'regiearbeit' | 'erledigt'
 
 export interface UserProfile {
   id: string

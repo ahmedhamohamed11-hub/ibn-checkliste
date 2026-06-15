@@ -322,7 +322,12 @@ export default function ProjectPage() {
 
     await supabase.from('tasks').update(updates).eq('id', task.id)
 
-    const actionMap = { offen: 'auf Offen gesetzt', in_arbeit: 'in Bearbeitung', erledigt: 'erledigt' }
+    const actionMap: Record<TaskStatus, string> = {
+      offen: 'auf Offen gesetzt',
+      in_arbeit: 'in Bearbeitung',
+      regiearbeit: 'als Regiearbeit markiert',
+      erledigt: 'erledigt',
+    }
     await supabase.from('activity_log').insert({
       project_id: id,
       task_id: task.id,
@@ -403,7 +408,7 @@ export default function ProjectPage() {
   const isParticipant = participants.some(p => p.user_name === userName)
   const isCreator = project?.creator_name === userName
 
-  const statusOrder = { in_arbeit: 0, offen: 1, erledigt: 2 }
+  const statusOrder = { in_arbeit: 0, regiearbeit: 1, offen: 2, erledigt: 3 }
   const filteredAndSortedTasks = tasks
     .filter(t => {
       const matchFilter = filter === 'alle' || t.status === filter
@@ -415,11 +420,13 @@ export default function ProjectPage() {
   const doneCount = tasks.filter(t => t.status === 'erledigt').length
   const inWorkCount = tasks.filter(t => t.status === 'in_arbeit').length
   const openCount = tasks.filter(t => t.status === 'offen').length
+  const regieCount = tasks.filter(t => t.status === 'regiearbeit').length
 
   const statusFilters = [
     { value: 'alle', label: 'Alle', count: tasks.length, color: 'var(--text-secondary)' },
     { value: 'offen', label: 'Offen', count: openCount, color: '#94a3b8' },
     { value: 'in_arbeit', label: 'In Arbeit', count: inWorkCount, color: '#f59e0b' },
+    { value: 'regiearbeit', label: 'Regiearbeit', count: regieCount, color: '#a855f7' },
     { value: 'erledigt', label: 'Erledigt', count: doneCount, color: '#10b981' },
   ] as const
 
@@ -475,9 +482,10 @@ export default function ProjectPage() {
         {/* Progress */}
         <div className="card" style={{ padding: '12px 16px', marginBottom: '16px' }}>
           <ProgressBar done={doneCount} total={tasks.length} />
-          <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '12px' }}>
+          <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
             <span>⬜ {openCount} offen</span>
             <span>🔶 {inWorkCount} in Arbeit</span>
+            <span style={{ color: '#a855f7' }}>🔷 {regieCount} Regiearbeit</span>
             <span>✅ {doneCount} erledigt</span>
           </div>
         </div>

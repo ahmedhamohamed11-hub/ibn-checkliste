@@ -5,8 +5,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { supabase } from '@/lib/supabase'
+import { PROJECT_TEMPLATES } from '@/lib/constants'
 import Navbar from '@/components/ui/Navbar'
-import { BookTemplate, ChevronRight, Edit, Trash2, Plus, X, ArrowUp, ArrowDown } from 'lucide-react'
+import { BookTemplate, ChevronRight, Edit, Trash2, Plus, X, ArrowUp, ArrowDown, Lock } from 'lucide-react'
 
 interface Template {
   id: string
@@ -176,6 +177,51 @@ export default function TemplatesPage() {
     setTemplateTasks(newTasks.sort((a, b) => a.position - b.position))
   }
 
+  const createProjectFromSystemTemplate = async (templateName: string, tasks: string[]) => {
+    if (!userName) return
+    setCreatingProject(templateName)
+    try {
+      const { data: newProject, error: projectError } = await supabase
+        .from('projects')
+        .insert({
+          name: templateName,
+          commissioning_date: null,
+          creator_name: userName,
+          archived: false,
+        })
+        .select()
+        .single()
+      if (projectError || !newProject) throw new Error('Projekt konnte nicht erstellt werden')
+      await supabase.from('project_participants').insert({
+        project_id: newProject.id,
+        user_name: userName,
+      })
+      if (tasks.length > 0) {
+        await supabase.from('tasks').insert(
+          tasks.map((title, i) => ({
+            project_id: newProject.id,
+            title,
+            status: 'offen',
+            created_by: userName,
+            position: i,
+          }))
+        )
+      }
+      await supabase.from('activity_log').insert({
+        project_id: newProject.id,
+        actor: userName,
+        action: 'Projekt aus Standardvorlage erstellt',
+        detail: templateName,
+      })
+      router.push(`/project/${newProject.id}`)
+    } catch (err) {
+      console.error(err)
+      alert('Fehler beim Erstellen des Projekts')
+    } finally {
+      setCreatingProject(null)
+    }
+  }
+
   const createProjectFromTemplate = async (template: Template) => {
     if (!userName) return
     setCreatingProject(template.id)
@@ -250,10 +296,54 @@ export default function TemplatesPage() {
           Wähle beim Erstellen eines Projekts eine Vorlage — Aufgaben werden automatisch übernommen.
         </p>
 
+        {/* Standardvorlagen (fest eingebaut) */}
+        <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+          <Lock size={14} /> Standardvorlagen
+        </h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px' }}>
+          {Object.entries(PROJECT_TEMPLATES).map(([name, tasks]) => (
+            <div key={name} className="card" style={{ padding: '14px 18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                <div>
+                  <h2 style={{ fontSize: '16px', fontWeight: 700 }}>{name}</h2>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{tasks.length} Aufgaben</p>
+                </div>
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                {tasks.slice(0, 4).map((task, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent)', flexShrink: 0 }} />
+                    <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{task}</span>
+                  </div>
+                ))}
+                {tasks.length > 4 && (
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', marginLeft: '13px' }}>
+                    + {tasks.length - 4} weitere ...
+                  </p>
+                )}
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={() => createProjectFromSystemTemplate(name, tasks)}
+                disabled={creatingProject === name}
+                style={{ width: '100%', padding: '9px' }}
+              >
+                {creatingProject === name ? 'Wird erstellt...' : 'Neues Projekt mit dieser Vorlage'}
+                <ChevronRight size={14} style={{ marginLeft: '6px' }} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Eigene Vorlagen */}
+        <h2 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '10px', color: 'var(--text-secondary)' }}>
+          Eigene Vorlagen
+        </h2>
+
         {templates.length === 0 ? (
           <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
             <BookTemplate size={48} style={{ color: 'var(--text-muted)', marginBottom: '12px' }} />
-            <p>Keine Vorlagen vorhanden</p>
+            <p>Keine eigenen Vorlagen vorhanden</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

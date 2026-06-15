@@ -15,9 +15,10 @@ interface Props {
 }
 
 const STATUS_CONFIG = {
-  offen:     { label: 'Offen',     bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)' },
-  in_arbeit: { label: 'In Arbeit', bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
-  erledigt:  { label: 'Erledigt',  bg: 'rgba(16,185,129,0.15)', color: '#10b981', border: 'rgba(16,185,129,0.3)' },
+  offen:        { label: 'Offen',        bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)' },
+  in_arbeit:    { label: 'In Arbeit',    bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
+  regiearbeit:  { label: 'Regiearbeit',  bg: 'rgba(168,85,247,0.15)', color: '#a855f7', border: 'rgba(168,85,247,0.3)' },
+  erledigt:     { label: 'Erledigt',     bg: 'rgba(16,185,129,0.15)', color: '#10b981', border: 'rgba(16,185,129,0.3)' },
 }
 
 export default function TaskCard({ task, projectId, userName, onStatusChange, onUpdated }: Props) {
@@ -102,7 +103,7 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
   }
 
   const cfg = STATUS_CONFIG[task.status]
-  const statusOrder: TaskStatus[] = ['offen', 'in_arbeit', 'erledigt']
+  const statusOrder: TaskStatus[] = ['offen', 'in_arbeit', 'regiearbeit', 'erledigt']
 
   return (
     <div
@@ -163,7 +164,7 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
   )}
 </div>
    {/* Status buttons */}
-        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
           {statusOrder.map(s => {
             const c = STATUS_CONFIG[s]
             const active = task.status === s
@@ -172,10 +173,10 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
                 key={s}
                 onClick={() => onStatusChange(s)}
                 style={{
-                  padding: '5px 9px', borderRadius: '6px', border: `1px solid ${active ? c.border : 'var(--border)'}`,
+                  padding: '5px 8px', borderRadius: '6px', border: `1px solid ${active ? c.border : 'var(--border)'}`,
                   background: active ? c.bg : 'transparent', color: active ? c.color : 'var(--text-muted)',
                   fontSize: '11px', fontWeight: 700, cursor: 'pointer', minHeight: 'auto',
-                  transition: 'all 0.15s', whiteSpace: 'nowrap',
+                  transition: 'all 0.15s', whiteSpace: 'nowrap', flex: '1 1 auto',
                 }}
               >
                 {c.label}

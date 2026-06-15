@@ -105,7 +105,7 @@ export default function LoginPage() {
             <input
               className="input"
               type="text"
-              placeholder="z.B. Ahmed, Ali, Mustafa ..."
+              placeholder="Name eingeben"
               value={name}
               onChange={e => { setName(e.target.value); setError('') }}
               onKeyDown={handleKey}
