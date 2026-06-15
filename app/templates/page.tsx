@@ -249,6 +249,30 @@ export default function TemplatesPage() {
     setSelectedFavIds(new Set(available.map(f => f.id)))
   }
 
+  const copySystemTemplate = async (tplName: string, tasks: string[]) => {
+    if (!userName) return
+    setSaving(true)
+    const { data: newTpl } = await supabase
+      .from('templates')
+      .insert({ name: tplName, description: null, created_by: userName })
+      .select().single()
+    if (newTpl && tasks.length > 0) {
+      await supabase.from('template_tasks').insert(
+        tasks.map((title, i) => ({ template_id: newTpl.id, title, position: i }))
+      )
+    }
+    await loadTemplates()
+    setSaving(false)
+    // Direkt in Bearbeitungsmodus öffnen
+    if (newTpl) {
+      setEditingTemplate(newTpl)
+      setTemplateName(newTpl.name)
+      setTemplateDescription('')
+      setCreateStep('tasks')
+      await loadTemplateTasks(newTpl.id)
+    }
+  }
+
   const createProjectFromSystemTemplate = async (tplName: string, tasks: string[]) => {
     if (!userName) return
     setCreatingProject(tplName)
@@ -351,15 +375,26 @@ export default function TemplatesPage() {
                   </p>
                 )}
               </div>
-              <button
-                className="btn btn-primary"
-                onClick={() => createProjectFromSystemTemplate(name, tasks)}
-                disabled={creatingProject === name}
-                style={{ width: '100%', padding: '9px' }}
-              >
-                {creatingProject === name ? 'Wird erstellt...' : 'Neues Projekt mit dieser Vorlage'}
-                <ChevronRight size={14} style={{ marginLeft: '6px' }} />
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => copySystemTemplate(name, tasks)}
+                  disabled={saving}
+                  style={{ flex: 1, padding: '9px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
+                  title="Als eigene Vorlage kopieren und bearbeiten"
+                >
+                  <Edit size={13} /> Kopieren & bearbeiten
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => createProjectFromSystemTemplate(name, tasks)}
+                  disabled={creatingProject === name}
+                  style={{ flex: 2, padding: '9px' }}
+                >
+                  {creatingProject === name ? 'Wird erstellt...' : 'Neues Projekt'}
+                  <ChevronRight size={14} style={{ marginLeft: '4px' }} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
