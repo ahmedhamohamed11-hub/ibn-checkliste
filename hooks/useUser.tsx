@@ -6,20 +6,24 @@ interface UserContextType {
   userName: string | null
   setUserName: (name: string) => void
   clearUser: () => void
+  isLoading: boolean
 }
 
 const UserContext = createContext<UserContextType>({
   userName: null,
   setUserName: () => {},
   clearUser: () => {},
+  isLoading: true,
 })
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [userName, setUserNameState] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const stored = localStorage.getItem('ib_username')
     if (stored) setUserNameState(stored)
+    setIsLoading(false)
   }, [])
 
   const setUserName = (name: string) => {
@@ -33,7 +37,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <UserContext.Provider value={{ userName, setUserName, clearUser }}>
+    <UserContext.Provider value={{ userName, setUserName, clearUser, isLoading }}>
       {children}
     </UserContext.Provider>
   )

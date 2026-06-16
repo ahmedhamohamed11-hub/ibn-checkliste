@@ -6,15 +6,15 @@ import { useTheme } from '@/hooks/useTheme'
 import { Thermometer, Zap, Wind, Sun, Moon } from 'lucide-react'
 
 export default function LoginPage() {
-  const { userName, setUserName } = useUser()
+  const { userName, setUserName, isLoading } = useUser()
   const { theme, toggleTheme } = useTheme()
   const router = useRouter()
   const [name, setName] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (userName) router.push('/dashboard')
-  }, [userName, router])
+    if (!isLoading && userName) router.push('/dashboard')
+  }, [userName, isLoading, router])
 
   const handleLogin = () => {
     const trimmed = name.trim()
@@ -26,6 +26,17 @@ export default function LoginPage() {
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleLogin()
+  }
+
+  // Während geprüft wird, ob bereits ein Name gespeichert ist, nichts anzeigen
+  // (verhindert kurzes Aufblitzen des Login-Formulars beim App-Start)
+  if (isLoading || userName) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: 'var(--bg-primary)' }}
+      />
+    )
   }
 
   return (
