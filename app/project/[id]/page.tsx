@@ -15,7 +15,7 @@ import {
   ArrowLeft, Plus, History, Settings, Users, ListPlus, Star
 } from 'lucide-react'
 
-type FilterStatus = 'alle' | TaskStatus
+type FilterStatus = 'alle' | TaskStatus | 'regie'
 
 // ==================== ADD TASK MODAL (Mehrfachauswahl bei Favoriten) ====================
 interface AddTaskModalProps {
@@ -312,27 +312,34 @@ export default function ProjectPage() {
     if (data) setParticipants(data)
   }
 
-  const handleStatusChange = async (task: Task, newStatus: TaskStatus) => {
+  const handleStatusChange = async (task: Task, newStatus: TaskStatus, isRegie?: boolean) => {
     const updates: Partial<Task> = {
       status: newStatus,
       modified_by: userName,
     }
-    if (newStatus === 'erledigt') updates.completed_by = userName!
-    else if (task.status === 'erledigt') updates.completed_by = null
+    if (newStatus === 'erledigt') {
+      updates.completed_by = userName!
+      // isRegie wird nur explizit übergeben, wenn der Regie-Toggle geklickt wurde.
+      // Beim normalen "Erledigt"-Button bleibt eine bestehende Regie-Kennzeichnung erhalten.
+      if (isRegie !== undefined) updates.is_regie = isRegie
+    } else {
+      updates.completed_by = null
+      updates.is_regie = false
+    }
 
     await supabase.from('tasks').update(updates).eq('id', task.id)
 
-    const actionMap: Record<TaskStatus, string> = {
-      offen: 'auf Offen gesetzt',
-      in_arbeit: 'in Bearbeitung',
-      regiearbeit: 'als Regiearbeit markiert',
-      erledigt: 'erledigt',
-    }
+    let action: string
+    if (newStatus === 'erledigt' && isRegie) action = 'als Regiearbeit erledigt'
+    else if (newStatus === 'erledigt') action = 'erledigt'
+    else if (newStatus === 'in_arbeit') action = 'in Bearbeitung'
+    else action = 'auf Offen gesetzt'
+
     await supabase.from('activity_log').insert({
       project_id: id,
       task_id: task.id,
       actor: userName,
-      action: `Aufgabe ${actionMap[newStatus]}`,
+      action: `Aufgabe ${action}`,
       detail: task.title,
     })
     loadTasks()
@@ -408,10 +415,14 @@ export default function ProjectPage() {
   const isParticipant = participants.some(p => p.user_name === userName)
   const isCreator = project?.creator_name === userName
 
-  const statusOrder = { in_arbeit: 0, regiearbeit: 1, offen: 2, erledigt: 3 }
+  const statusOrder = { in_arbeit: 0, offen: 1, erledigt: 2 }
   const filteredAndSortedTasks = tasks
     .filter(t => {
-      const matchFilter = filter === 'alle' || t.status === filter
+      // "regie" ist ein Filter auf das is_regie-Flag, kein Status-Vergleich.
+      const matchFilter =
+        filter === 'alle' ? true :
+        filter === 'regie' ? t.status === 'erledigt' && t.is_regie :
+        t.status === filter
       const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
       return matchFilter && matchSearch
     })
@@ -420,14 +431,16 @@ export default function ProjectPage() {
   const doneCount = tasks.filter(t => t.status === 'erledigt').length
   const inWorkCount = tasks.filter(t => t.status === 'in_arbeit').length
   const openCount = tasks.filter(t => t.status === 'offen').length
-  const regieCount = tasks.filter(t => t.status === 'regiearbeit').length
+  // Regie ist in doneCount bereits enthalten – wird hier nur zusätzlich
+  // ausgewiesen, nicht separat zur Gesamtsumme addiert.
+  const regieCount = tasks.filter(t => t.status === 'erledigt' && t.is_regie).length
 
   const statusFilters = [
     { value: 'alle', label: 'Alle', count: tasks.length, color: 'var(--text-secondary)' },
     { value: 'offen', label: 'Offen', count: openCount, color: '#94a3b8' },
     { value: 'in_arbeit', label: 'In Arbeit', count: inWorkCount, color: '#f59e0b' },
-    { value: 'regiearbeit', label: 'Regiearbeit', count: regieCount, color: '#a855f7' },
     { value: 'erledigt', label: 'Erledigt', count: doneCount, color: '#10b981' },
+    { value: 'regie', label: 'Regie', count: regieCount, color: '#a855f7' },
   ] as const
 
   if (loading) {
@@ -485,8 +498,8 @@ export default function ProjectPage() {
           <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
             <span>⬜ {openCount} offen</span>
             <span>🔶 {inWorkCount} in Arbeit</span>
-            <span style={{ color: '#a855f7' }}>🔷 {regieCount} Regiearbeit</span>
             <span>✅ {doneCount} erledigt</span>
+            <span style={{ color: '#a855f7' }}>🔷 davon {regieCount} Regie</span>
           </div>
         </div>
 
@@ -570,7 +583,7 @@ export default function ProjectPage() {
                 task={task}
                 projectId={id}
                 userName={userName!}
-                onStatusChange={status => handleStatusChange(task, status)}
+                onStatusChange={(status, isRegie) => handleStatusChange(task, status, isRegie)}
                 onUpdated={loadTasks}
               />
             ))}

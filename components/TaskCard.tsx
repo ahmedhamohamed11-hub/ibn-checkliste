@@ -10,16 +10,17 @@ interface Props {
   task: Task
   projectId: string
   userName: string
-  onStatusChange: (status: TaskStatus) => void
+  onStatusChange: (status: TaskStatus, isRegie?: boolean) => void
   onUpdated: () => void
 }
 
 const STATUS_CONFIG = {
-  offen:        { label: 'Offen',        bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)' },
-  in_arbeit:    { label: 'In Arbeit',    bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
-  regiearbeit:  { label: 'Regiearbeit',  bg: 'rgba(168,85,247,0.15)', color: '#a855f7', border: 'rgba(168,85,247,0.3)' },
-  erledigt:     { label: 'Erledigt',     bg: 'rgba(16,185,129,0.15)', color: '#10b981', border: 'rgba(16,185,129,0.3)' },
+  offen:     { label: 'Offen',     bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)' },
+  in_arbeit: { label: 'In Arbeit', bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
+  erledigt:  { label: 'Erledigt',  bg: 'rgba(16,185,129,0.15)',  color: '#10b981', border: 'rgba(16,185,129,0.3)' },
 }
+
+const REGIE_CONFIG = { label: 'Regie', bg: 'rgba(168,85,247,0.15)', color: '#a855f7', border: 'rgba(168,85,247,0.3)' }
 
 export default function TaskCard({ task, projectId, userName, onStatusChange, onUpdated }: Props) {
   const [expanded, setExpanded] = useState(false)
@@ -70,8 +71,14 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
   }
 
   const handleDelete = async () => {
-    await supabase.from('comments').delete().eq('task_id', task.id)
-    await supabase.from('activity_log').delete().eq('task_id', task.id)
+    const titleSnapshot = task.title
+    // Kommentare werden via Datenbank-Cascade (ON DELETE CASCADE) automatisch entfernt.
+    // Der Aktivitätsverlauf bleibt bewusst erhalten (ON DELETE SET NULL) –
+    // er ist ein Audit-Log und darf beim Löschen einer Aufgabe nicht verschwinden.
+    await supabase.from('activity_log').insert({
+      project_id: projectId, task_id: null, actor: userName,
+      action: 'Aufgabe gelöscht', detail: titleSnapshot,
+    })
     await supabase.from('tasks').delete().eq('id', task.id)
     onUpdated()
   }
@@ -103,7 +110,20 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
   }
 
   const cfg = STATUS_CONFIG[task.status]
-  const statusOrder: TaskStatus[] = ['offen', 'in_arbeit', 'regiearbeit', 'erledigt']
+  const statusOrder: TaskStatus[] = ['offen', 'in_arbeit', 'erledigt']
+
+  // Regie-Toggle: setzt die Aufgabe automatisch auf "erledigt" und
+  // schaltet die Regie-Kennzeichnung um. Regie ist kein eigener Status,
+  // sondern eine Zusatzmarkierung innerhalb von "erledigt".
+  const handleRegieToggle = () => {
+    if (task.status === 'erledigt' && task.is_regie) {
+      // Regie-Kennzeichnung entfernen, Aufgabe bleibt erledigt
+      onStatusChange('erledigt', false)
+    } else {
+      // Regie setzen → Aufgabe gilt automatisch als erledigt
+      onStatusChange('erledigt', true)
+    }
+  }
 
   return (
     <div
@@ -157,9 +177,25 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
         color: 'var(--text-muted)',
         fontSize: '11px',
         marginTop: '4px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
       }}
     >
       ✓ {task.completed_by}
+      {task.is_regie && (
+        <span style={{
+          color: REGIE_CONFIG.color,
+          background: REGIE_CONFIG.bg,
+          border: `1px solid ${REGIE_CONFIG.border}`,
+          borderRadius: '4px',
+          padding: '1px 6px',
+          fontSize: '10px',
+          fontWeight: 700,
+        }}>
+          Regie
+        </span>
+      )}
     </p>
   )}
 </div>
@@ -183,6 +219,22 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
               </button>
             )
           })}
+          {/* Regie: Zusatzmarkierung, kein eigener Status. Setzt die Aufgabe
+              automatisch auf "erledigt" und kennzeichnet sie zusätzlich. */}
+          <button
+            onClick={handleRegieToggle}
+            title="Als Regiearbeit kennzeichnen (Aufgabe gilt automatisch als erledigt)"
+            style={{
+              padding: '5px 8px', borderRadius: '6px',
+              border: `1px solid ${task.is_regie ? REGIE_CONFIG.border : 'var(--border)'}`,
+              background: task.is_regie ? REGIE_CONFIG.bg : 'transparent',
+              color: task.is_regie ? REGIE_CONFIG.color : 'var(--text-muted)',
+              fontSize: '11px', fontWeight: 700, cursor: 'pointer', minHeight: 'auto',
+              transition: 'all 0.15s', whiteSpace: 'nowrap', flex: '1 1 auto',
+            }}
+          >
+            {REGIE_CONFIG.label}
+          </button>
         </div>
        
         {/* Expand + actions */}

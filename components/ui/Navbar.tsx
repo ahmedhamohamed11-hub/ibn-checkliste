@@ -3,12 +3,11 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { useUser } from '@/hooks/useUser'
 import { useTheme } from '@/hooks/useTheme'
-import { supabase } from '@/lib/supabase'
 import { Thermometer, LayoutDashboard, Star, BookTemplate, Moon, Sun, LogOut, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 
 export default function Navbar() {
-  const { userName, setUserName } = useUser()
+  const { userName, setUserName, clearUser } = useUser()
   const { theme, toggleTheme } = useTheme()
   const router = useRouter()
   const pathname = usePathname()
@@ -30,10 +29,11 @@ export default function Navbar() {
     }
   }
 
-  // Korrigierte Logout-Funktion: setUserName('') statt null
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setUserName('')   // <-- hier wurde null durch '' ersetzt
+  // Logout: localStorage-Eintrag vollständig entfernen (nicht nur leeren).
+  // supabase.auth.signOut() wurde entfernt – die App nutzt keine Supabase-Auth,
+  // nur einen lokal gespeicherten Namen.
+  const handleLogout = () => {
+    clearUser()
     router.push('/')
     setShowUserMenu(false)
   }

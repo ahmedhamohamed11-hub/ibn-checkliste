@@ -1,4 +1,4 @@
-export type TaskStatus = 'offen' | 'in_arbeit' | 'regiearbeit' | 'erledigt'
+export type TaskStatus = 'offen' | 'in_arbeit' | 'erledigt'
 
 export interface UserProfile {
   id: string
@@ -30,6 +30,7 @@ export interface Task {
   title: string
   description: string | null
   status: TaskStatus
+  is_regie: boolean
   created_by: string
   modified_by: string | null
   completed_by: string | null
@@ -63,13 +64,6 @@ export interface Favorite {
   user_name: string
   title: string
   position: number
-  created_at: string
-}
-
-export interface Template {
-  id: string
-  name: string
-  tasks: string[]
   created_at: string
 }
 

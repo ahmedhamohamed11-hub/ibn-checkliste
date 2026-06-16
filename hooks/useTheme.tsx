@@ -14,19 +14,22 @@ const ThemeContext = createContext<ThemeContextType>({
 })
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark')
+  // Lazy-Init: liest das gespeicherte Theme bereits beim ersten Render,
+  // statt erst in einem useEffect danach – verhindert kurzes Aufblitzen
+  // des falschen Themes (z. B. Dark-Mode-Flash bei Light-Mode-Nutzern).
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return 'dark'
+    const stored = localStorage.getItem('ib_theme') as Theme | null
+    return stored || 'dark'
+  })
 
   useEffect(() => {
-    const stored = localStorage.getItem('ib_theme') as Theme | null
-    const initial = stored || 'dark'
-    setTheme(initial)
-    // CSS uses .light class, dark is default (no class needed)
-    if (initial === 'light') {
+    if (theme === 'light') {
       document.documentElement.classList.add('light')
     } else {
       document.documentElement.classList.remove('light')
     }
-  }, [])
+  }, [theme])
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
