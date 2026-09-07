@@ -15,7 +15,7 @@ import {
   ArrowLeft, Plus, History, Settings, Users, ListPlus, Star
 } from 'lucide-react'
 
-type FilterStatus = 'alle' | TaskStatus | 'regie'
+type FilterStatus = 'alle' | TaskStatus
 
 // ==================== ADD TASK MODAL (Mehrfachauswahl bei Favoriten) ====================
 interface AddTaskModalProps {
@@ -39,18 +39,21 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
   const loadFavorites = useCallback(async () => {
     if (!userName) return
     setLoadingFavorites(true)
-    const { data, error } = await supabase
-      .from('favorites')
-      .select('id, title')
-      .eq('user_name', userName)
-      .order('position', { ascending: true })
-    if (!error && data) {
-      setFavorites(data)
+    try {
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('id, title')
+        .eq('user_name', userName)
+        .order('position', { ascending: true })
+      if (error) throw error
+      setFavorites(data || [])
       setSelectedFavoriteIds(new Set())
-    } else {
+    } catch (err) {
+      console.error('Fehler beim Laden der Favoriten:', err)
       setFavorites([])
+    } finally {
+      setLoadingFavorites(false)
     }
-    setLoadingFavorites(false)
   }, [userName])
 
   useEffect(() => {
@@ -249,7 +252,7 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
-  const { userName } = useUser()
+  const { userName, isLoading: userLoading } = useUser()
   const router = useRouter()
 
   const [project, setProject] = useState<Project | null>(null)
@@ -268,12 +271,14 @@ export default function ProjectPage() {
   const [importingFavorites, setImportingFavorites] = useState(false)
 
   useEffect(() => {
+    if (userLoading) return
     if (!userName) {
+      setLoading(false)
       router.push('/')
       return
     }
     loadAll()
-  }, [id, userName])
+  }, [id, userName, userLoading])
 
   useEffect(() => {
     if (!id) return
@@ -290,59 +295,74 @@ export default function ProjectPage() {
 
   const loadAll = async () => {
     setLoading(true)
-    await Promise.all([loadProject(), loadTasks(), loadParticipants()])
-    setLoading(false)
+    try {
+      await Promise.all([loadProject(), loadTasks(), loadParticipants()])
+    } catch (err) {
+      console.error('Unerwarteter Fehler beim Laden des Projekts:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const loadProject = async () => {
-    const { data, error } = await supabase.from('projects').select('*').eq('id', id).single()
-    if (error) console.error('Fehler beim Laden des Projekts:', error)
-    if (data) setProject(data)
+    try {
+      const { data, error } = await supabase.from('projects').select('*').eq('id', id).single()
+      if (error) throw error
+      if (data) setProject(data)
+    } catch (err) {
+      console.error('Fehler beim Laden des Projekts:', err)
+    }
   }
 
   const loadTasks = async () => {
-    const { data, error } = await supabase.from('tasks').select('*').eq('project_id', id).order('position')
-    if (error) console.error('Fehler beim Laden der Aufgaben:', error)
-    if (data) setTasks(data)
+    try {
+      const { data, error } = await supabase.from('tasks').select('*').eq('project_id', id).order('position')
+      if (error) throw error
+      if (data) setTasks(data)
+    } catch (err) {
+      console.error('Fehler beim Laden der Aufgaben:', err)
+    }
   }
 
   const loadParticipants = async () => {
-    const { data, error } = await supabase.from('project_participants').select('*').eq('project_id', id)
-    if (error) console.error('Fehler beim Laden der Teilnehmer:', error)
-    if (data) setParticipants(data)
+    try {
+      const { data, error } = await supabase.from('project_participants').select('*').eq('project_id', id)
+      if (error) throw error
+      if (data) setParticipants(data)
+    } catch (err) {
+      console.error('Fehler beim Laden der Teilnehmer:', err)
+    }
   }
 
-  const handleStatusChange = async (task: Task, newStatus: TaskStatus, isRegie?: boolean) => {
+  const handleStatusChange = async (task: Task, newStatus: TaskStatus) => {
     const updates: Partial<Task> = {
       status: newStatus,
       modified_by: userName,
-    }
-    if (newStatus === 'erledigt') {
-      updates.completed_by = userName!
-      // isRegie wird nur explizit übergeben, wenn der Regie-Toggle geklickt wurde.
-      // Beim normalen "Erledigt"-Button bleibt eine bestehende Regie-Kennzeichnung erhalten.
-      if (isRegie !== undefined) updates.is_regie = isRegie
-    } else {
-      updates.completed_by = null
-      updates.is_regie = false
+      completed_by: newStatus === 'erledigt' ? userName! : null,
     }
 
-    await supabase.from('tasks').update(updates).eq('id', task.id)
+    try {
+      const { error } = await supabase.from('tasks').update(updates).eq('id', task.id)
+      if (error) throw error
 
-    let action: string
-    if (newStatus === 'erledigt' && isRegie) action = 'als Regiearbeit erledigt'
-    else if (newStatus === 'erledigt') action = 'erledigt'
-    else if (newStatus === 'in_arbeit') action = 'in Bearbeitung'
-    else action = 'auf Offen gesetzt'
+      let action: string
+      if (newStatus === 'erledigt') action = 'erledigt'
+      else if (newStatus === 'in_arbeit') action = 'in Bearbeitung'
+      else if (newStatus === 'regiearbeit') action = 'als Regiearbeit markiert'
+      else action = 'auf Offen gesetzt'
 
-    await supabase.from('activity_log').insert({
-      project_id: id,
-      task_id: task.id,
-      actor: userName,
-      action: `Aufgabe ${action}`,
-      detail: task.title,
-    })
-    loadTasks()
+      await supabase.from('activity_log').insert({
+        project_id: id,
+        task_id: task.id,
+        actor: userName,
+        action: `Aufgabe ${action}`,
+        detail: task.title,
+      })
+    } catch (err) {
+      console.error('Fehler beim Ändern des Status:', err)
+    } finally {
+      loadTasks()
+    }
   }
 
   const handleListImport = async () => {
@@ -415,14 +435,10 @@ export default function ProjectPage() {
   const isParticipant = participants.some(p => p.user_name === userName)
   const isCreator = project?.creator_name === userName
 
-  const statusOrder = { in_arbeit: 0, offen: 1, erledigt: 2 }
+  const statusOrder = { in_arbeit: 0, regiearbeit: 1, offen: 2, erledigt: 3 }
   const filteredAndSortedTasks = tasks
     .filter(t => {
-      // "regie" ist ein Filter auf das is_regie-Flag, kein Status-Vergleich.
-      const matchFilter =
-        filter === 'alle' ? true :
-        filter === 'regie' ? t.status === 'erledigt' && t.is_regie :
-        t.status === filter
+      const matchFilter = filter === 'alle' ? true : t.status === filter
       const matchSearch = t.title.toLowerCase().includes(search.toLowerCase())
       return matchFilter && matchSearch
     })
@@ -431,16 +447,14 @@ export default function ProjectPage() {
   const doneCount = tasks.filter(t => t.status === 'erledigt').length
   const inWorkCount = tasks.filter(t => t.status === 'in_arbeit').length
   const openCount = tasks.filter(t => t.status === 'offen').length
-  // Regie ist in doneCount bereits enthalten – wird hier nur zusätzlich
-  // ausgewiesen, nicht separat zur Gesamtsumme addiert.
-  const regieCount = tasks.filter(t => t.status === 'erledigt' && t.is_regie).length
+  const regieCount = tasks.filter(t => t.status === 'regiearbeit').length
 
   const statusFilters = [
     { value: 'alle', label: 'Alle', count: tasks.length, color: 'var(--text-secondary)' },
     { value: 'offen', label: 'Offen', count: openCount, color: '#94a3b8' },
     { value: 'in_arbeit', label: 'In Arbeit', count: inWorkCount, color: '#f59e0b' },
+    { value: 'regiearbeit', label: 'Regiearbeit', count: regieCount, color: '#f97316' },
     { value: 'erledigt', label: 'Erledigt', count: doneCount, color: '#10b981' },
-    { value: 'regie', label: 'Regie', count: regieCount, color: '#a855f7' },
   ] as const
 
   if (loading) {
@@ -477,8 +491,8 @@ export default function ProjectPage() {
             <ArrowLeft size={16} /> Dashboard
           </button>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-            <div>
-              <h1 style={{ fontSize: '22px', fontWeight: 800 }}>{project.name}</h1>
+            <div style={{ minWidth: 0, maxWidth: '100%' }}>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{project.name}</h1>
               <div style={{ display: 'flex', gap: '12px', marginTop: '4px', flexWrap: 'wrap' }}>
                 {project.commissioning_date && <span style={{ fontSize: '13px' }}>📅 {new Date(project.commissioning_date).toLocaleDateString('de-AT')}</span>}
                 <span style={{ fontSize: '13px' }}>👤 {project.creator_name}</span>
@@ -498,8 +512,8 @@ export default function ProjectPage() {
           <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
             <span>⬜ {openCount} offen</span>
             <span>🔶 {inWorkCount} in Arbeit</span>
+            <span style={{ color: '#f97316' }}>🔶 {regieCount} Regiearbeit</span>
             <span>✅ {doneCount} erledigt</span>
-            <span style={{ color: '#a855f7' }}>🔷 davon {regieCount} Regie</span>
           </div>
         </div>
 
@@ -583,7 +597,7 @@ export default function ProjectPage() {
                 task={task}
                 projectId={id}
                 userName={userName!}
-                onStatusChange={(status, isRegie) => handleStatusChange(task, status, isRegie)}
+                onStatusChange={(status) => handleStatusChange(task, status)}
                 onUpdated={loadTasks}
               />
             ))}

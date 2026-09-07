@@ -16,7 +16,7 @@ interface Favorite {
 }
 
 export default function FavoritesPage() {
-  const { userName } = useUser()
+  const { userName, isLoading: userLoading } = useUser()
   const router = useRouter()
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,27 +26,32 @@ export default function FavoritesPage() {
   const [editTitle, setEditTitle] = useState('')
 
   useEffect(() => {
+    if (userLoading) return
     if (!userName) {
+      setLoading(false)
       router.push('/')
       return
     }
     loadFavorites()
-  }, [userName])
+  }, [userName, userLoading])
 
   const loadFavorites = async () => {
     if (!userName) return
     setLoading(true)
-    const { data, error } = await supabase
-      .from('favorites')
-      .select('id, title, position')
-      .eq('user_name', userName)
-      .order('position', { ascending: true })
-    if (error) {
-      console.error('Fehler beim Laden der Favoriten:', error)
-    } else {
+    try {
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('id, title, position')
+        .eq('user_name', userName)
+        .order('position', { ascending: true })
+      if (error) throw error
       setFavorites(data || [])
+    } catch (err) {
+      console.error('Fehler beim Laden der Favoriten:', err)
+      setFavorites([])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const importDefaultFavorites = async () => {
@@ -162,7 +167,7 @@ export default function FavoritesPage() {
               className="btn btn-primary"
               onClick={importDefaultFavorites}
               disabled={saving}
-              style={{ margin: '0 auto' }}
+              style={{ margin: '0 auto', maxWidth: '100%', whiteSpace: 'normal', textAlign: 'center' }}
             >
               <Plus size={14} /> Standardliste importieren ({DEFAULT_FAVORITES.length} Einträge)
             </button>

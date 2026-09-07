@@ -19,14 +19,22 @@ export default function ActivityModal({ projectId, onClose }: Props) {
   }, [])
 
   const loadLogs = async () => {
-    const { data } = await supabase
-      .from('activity_log')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
-      .limit(100)
-    if (data) setLogs(data)
-    setLoading(false)
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('activity_log')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (error) throw error
+      setLogs(data || [])
+    } catch (err) {
+      console.error('Fehler beim Laden des Aktivitätsverlaufs:', err)
+      setLogs([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const getActionIcon = (action: string) => {

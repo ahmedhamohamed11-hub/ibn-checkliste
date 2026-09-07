@@ -17,7 +17,7 @@ interface ProjectWithStats extends Project {
 }
 
 export default function DashboardPage() {
-  const { userName } = useUser()
+  const { userName, isLoading: userLoading } = useUser()
   const router = useRouter()
   const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,12 +29,17 @@ export default function DashboardPage() {
   const [importingFavorites, setImportingFavorites] = useState(false)
 
   useEffect(() => {
+    // Warten, bis useUser() den localStorage-Check abgeschlossen hat.
+    // Sonst wird bei jedem Laden fälschlich sofort umgeleitet, bevor
+    // der gespeicherte Name überhaupt gelesen werden konnte.
+    if (userLoading) return
     if (!userName) {
+      setLoading(false)
       router.push('/')
       return
     }
     loadProjects()
-  }, [userName])
+  }, [userName, userLoading])
 
   useEffect(() => {
     if (!userName) return
@@ -404,7 +409,7 @@ export default function DashboardPage() {
               >
                 {/* Top row */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px', gap: '10px' }}>
-                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '15px', flex: 1, paddingRight: '8px', lineHeight: 1.3 }}>
+                  <h3 style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '15px', flex: 1, minWidth: 0, paddingRight: '8px', lineHeight: 1.3, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                     {project.name}
                   </h3>
                   {project.archived && (

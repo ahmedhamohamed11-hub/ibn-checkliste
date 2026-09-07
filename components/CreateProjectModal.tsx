@@ -318,7 +318,7 @@ export default function CreateProjectModal({ onClose, onCreated, userName }: Pro
                 className="btn btn-primary"
                 onClick={handleCreate}
                 disabled={loading}
-                style={{ flex: 2 }}
+                style={{ flex: 2, minWidth: 0, whiteSpace: 'normal', textAlign: 'center' }}
               >
                 {loading ? 'Erstelle ...' : `✓ Projekt erstellen (${selectedTasks.size} Aufgaben)`}
               </button>

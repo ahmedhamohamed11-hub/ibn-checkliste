@@ -21,9 +21,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const stored = localStorage.getItem('ib_username')
-    if (stored) setUserNameState(stored)
-    setIsLoading(false)
+    try {
+      const stored = localStorage.getItem('ib_username')
+      if (stored) setUserNameState(stored)
+    } catch (err) {
+      console.error('Fehler beim Lesen des gespeicherten Benutzers:', err)
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
   const setUserName = (name: string) => {

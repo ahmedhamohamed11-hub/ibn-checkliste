@@ -3,24 +3,23 @@
 import { useState } from 'react'
 import { Task, TaskStatus, Comment } from '@/types'
 import { supabase } from '@/lib/supabase'
-import { ChevronDown, ChevronUp, MessageSquare, Pencil, Trash2, Send, X, Check } from 'lucide-react'
+import { ChevronDown, ChevronUp, MessageSquare, Pencil, Trash2, Send, X, Check, Star } from 'lucide-react'
 import { useEffect } from 'react'
 
 interface Props {
   task: Task
   projectId: string
   userName: string
-  onStatusChange: (status: TaskStatus, isRegie?: boolean) => void
+  onStatusChange: (status: TaskStatus) => void
   onUpdated: () => void
 }
 
 const STATUS_CONFIG = {
-  offen:     { label: 'Offen',     bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)' },
-  in_arbeit: { label: 'In Arbeit', bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
-  erledigt:  { label: 'Erledigt',  bg: 'rgba(16,185,129,0.15)',  color: '#10b981', border: 'rgba(16,185,129,0.3)' },
+  offen:       { label: 'Offen',       bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: 'rgba(100,116,139,0.3)' },
+  in_arbeit:   { label: 'In Arbeit',   bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
+  regiearbeit: { label: 'Regiearbeit', bg: 'rgba(249,115,22,0.15)',  color: '#f97316', border: 'rgba(249,115,22,0.3)' },
+  erledigt:    { label: 'Erledigt',    bg: 'rgba(16,185,129,0.15)',  color: '#10b981', border: 'rgba(16,185,129,0.3)' },
 }
-
-const REGIE_CONFIG = { label: 'Regie', bg: 'rgba(168,85,247,0.15)', color: '#a855f7', border: 'rgba(168,85,247,0.3)' }
 
 export default function TaskCard({ task, projectId, userName, onStatusChange, onUpdated }: Props) {
   const [expanded, setExpanded] = useState(false)
@@ -109,19 +108,36 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
     loadComments()
   }
 
-  const cfg = STATUS_CONFIG[task.status]
-  const statusOrder: TaskStatus[] = ['offen', 'in_arbeit', 'erledigt']
+  const statusOrder: TaskStatus[] = ['offen', 'in_arbeit', 'regiearbeit', 'erledigt']
 
-  // Regie-Toggle: setzt die Aufgabe automatisch auf "erledigt" und
-  // schaltet die Regie-Kennzeichnung um. Regie ist kein eigener Status,
-  // sondern eine Zusatzmarkierung innerhalb von "erledigt".
-  const handleRegieToggle = () => {
-    if (task.status === 'erledigt' && task.is_regie) {
-      // Regie-Kennzeichnung entfernen, Aufgabe bleibt erledigt
-      onStatusChange('erledigt', false)
-    } else {
-      // Regie setzen → Aufgabe gilt automatisch als erledigt
-      onStatusChange('erledigt', true)
+  const handleSaveFavorite = async () => {
+    try {
+      const { data: existing, error: existingError } = await supabase
+        .from('favorites')
+        .select('id')
+        .eq('user_name', userName)
+        .ilike('title', task.title)
+        .maybeSingle()
+      if (existingError) throw existingError
+      if (existing) return
+
+      const { data: maxPosData, error: maxPosError } = await supabase
+        .from('favorites')
+        .select('position')
+        .eq('user_name', userName)
+        .order('position', { ascending: false })
+        .limit(1)
+      if (maxPosError) throw maxPosError
+      const nextPos = maxPosData && maxPosData.length > 0 ? maxPosData[0].position + 1 : 0
+
+      const { error: insertError } = await supabase.from('favorites').insert({
+        user_name: userName,
+        title: task.title,
+        position: nextPos,
+      })
+      if (insertError) throw insertError
+    } catch (err) {
+      console.error('Fehler beim Speichern als Favorit:', err)
     }
   }
 
@@ -177,73 +193,48 @@ export default function TaskCard({ task, projectId, userName, onStatusChange, on
         color: 'var(--text-muted)',
         fontSize: '11px',
         marginTop: '4px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
       }}
     >
       ✓ {task.completed_by}
-      {task.is_regie && (
-        <span style={{
-          color: REGIE_CONFIG.color,
-          background: REGIE_CONFIG.bg,
-          border: `1px solid ${REGIE_CONFIG.border}`,
-          borderRadius: '4px',
-          padding: '1px 6px',
-          fontSize: '10px',
-          fontWeight: 700,
-        }}>
-          Regie
-        </span>
-      )}
     </p>
   )}
 </div>
-   {/* Status buttons */}
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+   {/* Status buttons: immer nebeneinander, nie umbrechen */}
+        <div className="status-btn-row">
           {statusOrder.map(s => {
             const c = STATUS_CONFIG[s]
             const active = task.status === s
             return (
               <button
                 key={s}
+                className="status-btn"
                 onClick={() => onStatusChange(s)}
                 style={{
-                  padding: '5px 8px', borderRadius: '6px', border: `1px solid ${active ? c.border : 'var(--border)'}`,
-                  background: active ? c.bg : 'transparent', color: active ? c.color : 'var(--text-muted)',
-                  fontSize: '11px', fontWeight: 700, cursor: 'pointer', minHeight: 'auto',
-                  transition: 'all 0.15s', whiteSpace: 'nowrap', flex: '1 1 auto',
+                  border: `1px solid ${active ? c.border : 'var(--border)'}`,
+                  background: active ? c.bg : 'transparent',
+                  color: active ? c.color : 'var(--text-muted)',
                 }}
               >
                 {c.label}
               </button>
             )
           })}
-          {/* Regie: Zusatzmarkierung, kein eigener Status. Setzt die Aufgabe
-              automatisch auf "erledigt" und kennzeichnet sie zusätzlich. */}
-          <button
-            onClick={handleRegieToggle}
-            title="Als Regiearbeit kennzeichnen (Aufgabe gilt automatisch als erledigt)"
-            style={{
-              padding: '5px 8px', borderRadius: '6px',
-              border: `1px solid ${task.is_regie ? REGIE_CONFIG.border : 'var(--border)'}`,
-              background: task.is_regie ? REGIE_CONFIG.bg : 'transparent',
-              color: task.is_regie ? REGIE_CONFIG.color : 'var(--text-muted)',
-              fontSize: '11px', fontWeight: 700, cursor: 'pointer', minHeight: 'auto',
-              transition: 'all 0.15s', whiteSpace: 'nowrap', flex: '1 1 auto',
-            }}
-          >
-            {REGIE_CONFIG.label}
-          </button>
         </div>
-       
+
         {/* Expand + actions */}
-        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: '4px', flexShrink: 0, alignItems: 'center' }}>
           {comments.length > 0 && !expanded && (
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '3px' }}>
               <MessageSquare size={12} /> {comments.length}
             </span>
           )}
+          <button
+            onClick={handleSaveFavorite}
+            title="Als Favorit speichern"
+            style={{ background: 'none', border: 'none', color: '#f59e0b', padding: '4px', cursor: 'pointer', minHeight: 'auto', display: 'flex', alignItems: 'center' }}
+          >
+            <Star size={16} />
+          </button>
           <button
             onClick={() => setExpanded(!expanded)}
             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', padding: '4px', cursor: 'pointer', minHeight: 'auto', display: 'flex', alignItems: 'center' }}

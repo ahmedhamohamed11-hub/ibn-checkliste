@@ -39,7 +39,7 @@ export const DEFAULT_FAVORITES = [
 ]
 
 export const PROJECT_TEMPLATES: Record<string, string[]> = {
-  'CO₂-Verbundanlage': [
+  'Hofer Hüttenbrenner': [
     'Messprotokolle',
     'Elektrische Messungen',
     'DIN-XP + HCO einstellen',
@@ -47,15 +47,35 @@ export const PROJECT_TEMPLATES: Record<string, string[]> = {
     'Sauggasfühler bei Kühlzelle isolieren',
     'Ausdehnungsgefäß auf 1,5 bar einstellen',
     'TK-Druckschalter testen',
+    'Kühlzellenregler schließen (alle Regler)',
+    'Kühlzellen Pickerl + GWA (Blitzleuchte)',
+    'P-Touch Pickerl (Position, Abtauzeit, Fühlerposition)',
+    'Adresse + Abtauzeit + TWP + GWA prüfen',
     'Alarmweiterleitung testen',
     'IP-Adresse einstellen',
     'Anlagenbuch erstellen',
     'Verplomben',
     'Einschulung der Anlage',
-    'P-Touch Pickerl (Position, Abtauzeit, Fühlerposition)',
-    'Kühlzellenregler schließen (alle Regler)',
   ],
-  'Split-Klimaanlage': [
+  'SPAR': [
+    'Messprotokolle',
+    'Elektrische Messungen',
+    'Klimamodul',
+    'Tankwasserpumpe + Alarm',
+    'Deckenlüfterkassetten testen',
+    'Honeywell testen',
+    'Umschaltventile testen',
+    'Zonenventile testen',
+    'Heizungsmodul einschalten',
+    'Verkaufsfühler Mitte Geschäft',
+    'TWA Pumpe Getränke + Fleisch',
+    'IP-Adresse einstellen',
+    'Alarmweiterleitung testen',
+    'Anlagenbuch erstellen',
+    'Verplomben',
+    'Einschulung der Anlage',
+  ],
+  'Klimaanlage': [
     'Elektrische Messungen',
     'Klimamodul',
     'IP-Adresse einstellen',
@@ -77,18 +97,6 @@ export const PROJECT_TEMPLATES: Record<string, string[]> = {
     'Alarmweiterleitung testen',
     'Einschulung der Anlage',
     'Anlagenbuch erstellen',
-  ],
-  'Kühlzelle': [
-    'Messprotokolle',
-    'Elektrische Messungen',
-    'Sauggasfühler bei Kühlzelle isolieren',
-    'Pfeile + Pickerl (Rohre + Türe Kühlraum)',
-    'Kühlzellenregler schließen (alle Regler)',
-    'Kühlzellen Pickerl + GWA (Blitzleuchte)',
-    'P-Touch Pickerl (Position, Abtauzeit, Fühlerposition)',
-    'Adresse + Abtauzeit + TWP + GWA prüfen',
-    'Verplomben',
-    'Einschulung der Anlage',
   ],
   'Supermarkt': [
     'Messprotokolle',

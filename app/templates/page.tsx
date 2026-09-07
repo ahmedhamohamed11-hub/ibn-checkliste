@@ -30,7 +30,7 @@ interface Favorite {
 }
 
 export default function TemplatesPage() {
-  const { userName } = useUser()
+  const { userName, isLoading: userLoading } = useUser()
   const router = useRouter()
   const [templates, setTemplates] = useState<Template[]>([])
   const [tasksByTemplate, setTasksByTemplate] = useState<Record<string, TemplateTask[]>>({})
@@ -54,46 +54,61 @@ export default function TemplatesPage() {
   const [createStep, setCreateStep] = useState<'name' | 'tasks'>('name')
 
   useEffect(() => {
+    if (userLoading) return
     if (!userName) {
+      setLoading(false)
       router.push('/')
       return
     }
     loadTemplates()
     loadFavorites()
-  }, [userName])
+  }, [userName, userLoading])
 
   const loadFavorites = async () => {
     if (!userName) return
-    const { data } = await supabase
-      .from('favorites')
-      .select('id, title, position')
-      .eq('user_name', userName)
-      .order('position', { ascending: true })
-    setFavorites(data || [])
+    try {
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('id, title, position')
+        .eq('user_name', userName)
+        .order('position', { ascending: true })
+      if (error) throw error
+      setFavorites(data || [])
+    } catch (err) {
+      console.error('Fehler beim Laden der Favoriten:', err)
+      setFavorites([])
+    }
   }
 
   const loadTemplates = async () => {
     if (!userName) return
     setLoading(true)
-    const { data, error } = await supabase
-      .from('templates')
-      .select('*')
-      .eq('created_by', userName)
-      .order('created_at', { ascending: false })
-    if (!error && data) {
-      setTemplates(data)
+    try {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('created_by', userName)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setTemplates(data || [])
       const tasksMap: Record<string, TemplateTask[]> = {}
-      for (const t of data) {
-        const { data: tasks } = await supabase
+      for (const t of data || []) {
+        const { data: tasks, error: tasksError } = await supabase
           .from('template_tasks')
           .select('*')
           .eq('template_id', t.id)
           .order('position', { ascending: true })
+        if (tasksError) throw tasksError
         tasksMap[t.id] = tasks || []
       }
       setTasksByTemplate(tasksMap)
+    } catch (err) {
+      console.error('Fehler beim Laden der Vorlagen:', err)
+      setTemplates([])
+      setTasksByTemplate({})
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const loadTemplateTasks = useCallback(async (templateId: string) => {
@@ -380,7 +395,7 @@ export default function TemplatesPage() {
                   className="btn btn-ghost"
                   onClick={() => copySystemTemplate(name, tasks)}
                   disabled={saving}
-                  style={{ flex: 1, padding: '9px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
+                  style={{ flex: 1, minWidth: 0, padding: '9px 6px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', whiteSpace: 'normal', textAlign: 'center' }}
                   title="Als eigene Vorlage kopieren und bearbeiten"
                 >
                   <Edit size={13} /> Kopieren & bearbeiten
@@ -389,7 +404,7 @@ export default function TemplatesPage() {
                   className="btn btn-primary"
                   onClick={() => createProjectFromSystemTemplate(name, tasks)}
                   disabled={creatingProject === name}
-                  style={{ flex: 2, padding: '9px' }}
+                  style={{ flex: 1, minWidth: 0, padding: '9px 6px', whiteSpace: 'normal', textAlign: 'center' }}
                 >
                   {creatingProject === name ? 'Wird erstellt...' : 'Neues Projekt'}
                   <ChevronRight size={14} style={{ marginLeft: '4px' }} />
