@@ -18,6 +18,7 @@ interface Template {
 
 interface TemplateTask {
   id: string
+  template_id: string
   title: string
   description: string | null
   position: number
@@ -91,15 +92,24 @@ export default function TemplatesPage() {
         .order('created_at', { ascending: false })
       if (error) throw error
       setTemplates(data || [])
+
+      // Alle Aufgaben aller Vorlagen in einer einzigen Abfrage laden
+      // (statt einer Abfrage pro Vorlage) — deutlich schneller bei
+      // mehreren eigenen Vorlagen.
+      const templateIds = (data || []).map(t => t.id)
       const tasksMap: Record<string, TemplateTask[]> = {}
-      for (const t of data || []) {
-        const { data: tasks, error: tasksError } = await supabase
+      if (templateIds.length > 0) {
+        const { data: allTasks, error: tasksError } = await supabase
           .from('template_tasks')
           .select('*')
-          .eq('template_id', t.id)
+          .in('template_id', templateIds)
           .order('position', { ascending: true })
         if (tasksError) throw tasksError
-        tasksMap[t.id] = tasks || []
+        for (const id of templateIds) tasksMap[id] = []
+        for (const task of allTasks || []) {
+          tasksMap[task.template_id] = tasksMap[task.template_id] || []
+          tasksMap[task.template_id].push(task)
+        }
       }
       setTasksByTemplate(tasksMap)
     } catch (err) {

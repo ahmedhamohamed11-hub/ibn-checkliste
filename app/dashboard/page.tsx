@@ -26,7 +26,6 @@ export default function DashboardPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [deleteConfirmName, setDeleteConfirmName] = useState('')
-  const [importingFavorites, setImportingFavorites] = useState(false)
 
   useEffect(() => {
     // Warten, bis useUser() den localStorage-Check abgeschlossen hat.
@@ -213,54 +212,12 @@ export default function DashboardPage() {
     }
   }
 
-  // ⭐ Neue Funktion: Alle Favoriten des Benutzers in ein neues Projekt importieren
-  const importFavoritesToProject = async (projectId: string) => {
-    if (!userName) return
-    setImportingFavorites(true)
-    try {
-      const { data: favorites, error } = await supabase
-        .from('favorites')
-        .select('title')
-        .eq('user_name', userName)
-        .order('position', { ascending: true })
-
-      if (error) throw error
-      if (!favorites || favorites.length === 0) {
-        console.log('Keine Favoriten zum Importieren')
-        return
-      }
-
-      const newTasks = favorites.map((fav, idx) => ({
-        project_id: projectId,
-        title: fav.title,
-        status: 'offen',
-        created_by: userName,
-        position: idx,
-      }))
-
-      const { error: insertError } = await supabase.from('tasks').insert(newTasks)
-      if (insertError) throw insertError
-
-      await supabase.from('activity_log').insert({
-        project_id: projectId,
-        actor: userName,
-        action: `${favorites.length} Favoriten als Aufgaben importiert`,
-        detail: favorites.map(f => f.title).join(', '),
-      })
-
-      console.log(`${favorites.length} Favoriten wurden als Aufgaben importiert.`)
-    } catch (err) {
-      console.error('Fehler beim Importieren der Favoriten:', err)
-    } finally {
-      setImportingFavorites(false)
-    }
-  }
-
-  // ⭐ Neuer Callback, der nach der Projekterstellung aufgerufen wird
-  const handleProjectCreated = async (newProjectId: string) => {
-    // Zuerst alle Favoriten importieren
-    await importFavoritesToProject(newProjectId)
-    // Dann zum Projekt navigieren
+  // Nach der Projekterstellung zum neuen Projekt navigieren.
+  // Die Aufgaben (inkl. Favoriten/Vorlage) wurden bereits im
+  // CreateProjectModal anhand der Auswahl des Nutzers angelegt —
+  // hier NICHT zusätzlich alle Favoriten importieren, sonst entstehen
+  // doppelte/ungewollte Aufgaben.
+  const handleProjectCreated = (newProjectId: string) => {
     router.push(`/project/${newProjectId}`)
     setShowCreateModal(false)
   }

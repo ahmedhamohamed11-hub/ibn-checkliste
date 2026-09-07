@@ -98,17 +98,19 @@ export default function CreateProjectModal({ onClose, onCreated, userName }: Pro
     if (!name.trim()) return
     setLoading(true)
     try {
-      const { data: project } = await supabase
+      const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert({ name: name.trim(), commissioning_date: date || null, creator_name: userName, archived: false })
         .select().single()
+      if (projectError) throw projectError
       if (!project) throw new Error('Projekt konnte nicht erstellt werden')
 
       // Add participants
       if (participants.length > 0) {
-        await supabase.from('project_participants').insert(
+        const { error: participantsError } = await supabase.from('project_participants').insert(
           participants.map(p => ({ project_id: project.id, user_name: p }))
         )
+        if (participantsError) throw participantsError
       }
 
       // Create tasks in order
@@ -117,16 +119,22 @@ export default function CreateProjectModal({ onClose, onCreated, userName }: Pro
         .sort((a, b) => taskList.indexOf(a) - taskList.indexOf(b))
 
       if (tasks.length > 0) {
-        await supabase.from('tasks').insert(
+        const { error: tasksError } = await supabase.from('tasks').insert(
           tasks.map((title, i) => ({
             project_id: project.id, title, status: 'offen',
             created_by: userName, position: i,
           }))
         )
-        // Update suggestion library
-        for (const title of tasks) {
-          try { await supabase.rpc('upsert_suggestion', { p_title: title }) } catch {}
-        }
+        if (tasksError) throw tasksError
+
+        // Vorschlagsliste aktualisieren — nebenläufig und nicht blockierend,
+        // da rein für die Autocomplete-Vorschläge und nicht kritisch für die
+        // Projekterstellung. Vorher lief das sequenziell in einer Schleife
+        // und hat bei vielen Aufgaben (z. B. Vorlagen mit 20+ Punkten) die
+        // Weiterleitung spürbar verzögert.
+        Promise.allSettled(
+          tasks.map(title => supabase.rpc('upsert_suggestion', { p_title: title }))
+        ).catch(() => {})
       }
 
       await supabase.from('activity_log').insert({
@@ -135,6 +143,9 @@ export default function CreateProjectModal({ onClose, onCreated, userName }: Pro
       })
 
       onCreated(project.id)
+    } catch (err) {
+      console.error('Fehler beim Erstellen des Projekts:', err)
+      alert('Fehler beim Erstellen des Projekts. Bitte versuche es erneut.')
     } finally {
       setLoading(false)
     }

@@ -142,15 +142,16 @@ function AddTaskModal({ projectId, userName, nextPosition, onClose, onCreated }:
       return
     }
 
-    // Aktivitäten loggen (eine pro Aufgabe)
-    for (const fav of selectedFavorites) {
-      await supabase.from('activity_log').insert({
+    // Aktivitäten loggen (eine pro Aufgabe, in einer einzigen Anfrage
+    // statt sequenziell einzeln — spürbar schneller bei vielen Favoriten)
+    await supabase.from('activity_log').insert(
+      selectedFavorites.map(fav => ({
         project_id: projectId,
         actor: userName,
         action: 'Aufgabe aus Favorit hinzugefügt',
         detail: fav.title,
-      })
-    }
+      }))
+    )
 
     onCreated()
     onClose()
